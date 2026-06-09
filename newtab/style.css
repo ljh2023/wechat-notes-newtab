@@ -47,15 +47,27 @@ a {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   height: 100vh;
   width: 100vw;
-  padding: 32px 24px;
+  padding: 20px 24px;
   animation: fadeIn 0.4s ease;
+  overflow-y: auto;
 }
 
 .state.active {
   display: flex;
+}
+
+/* 滚动区域：短内容居中，长内容可滚 */
+.state-scroll {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  width: 100%;
+  max-width: 680px;
 }
 
 @keyframes fadeIn {
@@ -216,10 +228,8 @@ a {
 
 /* ---- Footer ---- */
 .footer-info {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  flex-shrink: 0;
+  padding: 12px 0 8px;
   font-size: 13px;
   color: var(--text-tertiary);
   text-align: center;
