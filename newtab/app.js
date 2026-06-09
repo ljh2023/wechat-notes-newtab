@@ -39,11 +39,11 @@ const btnDelete    = document.getElementById('btnDelete');
 const toast        = document.getElementById('toast');
 
 // ---- State ----
-let allNotes = [];       // 全部笔记
-let filteredNotes = [];  // 排除黑名单后的可用笔记
-let shownIds = [];       // 本轮已展示过的 note id（用于防重复）
+let allNotes = [];
+let filteredNotes = [];
+let shownIds = [];
 let currentNote = null;
-let excludeBooks = [];   // 被排除的书名列表
+let excludeBooks = [];
 let stats = { total: 0, excluded: 0 };
 
 // ---- Show/hide states ----
@@ -76,7 +76,6 @@ function updateFiltered() {
 function pickNext() {
   if (!filteredNotes.length) return null;
 
-  // 如果所有笔记都已看过，重置 shownIds
   if (shownIds.length >= filteredNotes.length) {
     shownIds = [];
   }
@@ -85,7 +84,6 @@ function pickNext() {
   const candidates = filteredNotes.filter(n => !seen.has(n.id));
 
   if (!candidates.length) {
-    // 不应发生，但兜底
     shownIds = [];
     return pickNext();
   }
@@ -104,27 +102,25 @@ function renderNote(note) {
 
   if (note.book) {
     const chapterHTML = note.chapter
-      ? ` · ${note.chapter}`
+      ? ' &middot; ' + escapeHTML(note.chapter)
       : '';
     noteSource.innerHTML = `
-      <div class="book-name">《${escapeHTML(note.book)}》</div>
+      <div class="book-name">&laquo;${escapeHTML(note.book)}&raquo;</div>
       <div class="book-meta">${escapeHTML(note.author || '')}${chapterHTML}</div>
     `;
   } else {
     noteSource.innerHTML = '';
   }
 
-  // 更新底部统计
   const activeCount = filteredNotes.length;
   const totalCount  = allNotes.length;
-  let info = `共 ${totalCount} 条笔记`;
+  let info = '共 ' + totalCount + ' 条笔记';
   if (stats.excluded > 0) {
-    info += ` · 已排除 ${stats.excluded} 条`;
+    info += ' &middot; 已排除 ' + stats.excluded + ' 条';
   }
-  info += ` · <a href="#" id="openSettingsLink">设置</a>`;
+  info += ' &middot; <a href="#" id="openSettingsLink">设置</a>';
   footerInfo.innerHTML = info;
 
-  // 绑定设置链接
   const settingsLink = document.getElementById('openSettingsLink');
   if (settingsLink) {
     settingsLink.addEventListener('click', (e) => {
@@ -154,14 +150,12 @@ function switchToNext() {
     return;
   }
 
-  // Exit animation
   card.classList.add('card-exit');
   card.classList.remove('card-enter');
 
   setTimeout(() => {
     renderNote(next);
     card.classList.remove('card-exit');
-    // Trigger reflow for re-animation
     void card.offsetWidth;
     card.classList.add('card-enter');
   }, 250);
@@ -189,7 +183,6 @@ async function init() {
       return;
     }
 
-    // 正常展示
     showState('display');
     const first = pickNext();
     if (first) {
@@ -207,52 +200,194 @@ async function init() {
   }
 }
 
+// ======== Canvas 书摘卡片渲染（替换 html2canvas） ========
+
 // ---- Copy as image ----
 btnCopy.addEventListener('click', async () => {
   if (!currentNote) return;
   showToast('📸 正在生成书摘图片...');
 
   try {
-    const canvas = await html2canvas(card, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true,
-      logging: false,
+    const canvas = renderNoteCard(currentNote);
+    const blob = await new Promise(function (resolve) {
+      canvas.toBlob(resolve, 'image/png');
     });
+    if (!blob) throw new Error('生成图片失败');
 
-    canvas.toBlob(async (blob) => {
-      if (!blob) {
-        showToast('❌ 生成图片失败');
-        return;
-      }
-      try {
-        await navigator.clipboard.write([
-          new ClipboardItem({ 'image/png': blob })
-        ]);
-        showToast('✅ 书摘图片已复制到剪贴板');
-      } catch (clipErr) {
-        console.error('Clipboard write failed:', clipErr);
-        // Fallback: 复制文字
-        try {
-          const text = currentNote.content + (currentNote.book ? ` ——《${currentNote.book}》` : '');
-          await navigator.clipboard.writeText(text);
-          showToast('⚠️ 图片复制不支持，已复制文字版本');
-        } catch {
-          showToast('❌ 复制失败');
-        }
-      }
-    }, 'image/png');
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': blob })
+    ]);
+    showToast('✅ 书摘图片已复制到剪贴板');
   } catch (err) {
-    console.error('html2canvas failed:', err);
-    showToast('❌ 图片生成失败');
+    console.error('复制失败:', err);
+    showToast('❌ 生成图片失败');
   }
 });
+
+/**
+ * 用 Canvas 2D API 渲染书摘卡片，文字清晰锐利
+ */
+function renderNoteCard(note) {
+  var PAD = 52;
+  var PAD_TOP = 56;
+  var CARD_W = 780;
+  var QUOTE_SIZE = 56;
+  var FONT_SIZE = 22;
+  var LINE_HEIGHT = 40;
+  var SOURCE_GAP = 28;
+  var SOURCE_LINE_TOP = 16;
+  var BOTTOM_PAD = 44;
+  var DPR = 3;
+
+  var maxTextWidth = CARD_W - PAD * 2;
+
+  // 临时 canvas 测量文字
+  var tempCanvas = document.createElement('canvas');
+  var tempCtx = tempCanvas.getContext('2d');
+  tempCtx.font = FONT_SIZE + 'px "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif';
+
+  var lines = wrapChineseText(tempCtx, note.content, maxTextWidth);
+  var textHeight = lines.length * LINE_HEIGHT;
+
+  var hasSource = !!(note.book || note.author || note.chapter);
+  var sourceHeight = hasSource ? 48 : 0;
+
+  var CARD_H = PAD_TOP + textHeight + SOURCE_GAP + sourceHeight + BOTTOM_PAD;
+
+  // 高分辨率 canvas
+  var canvas = document.createElement('canvas');
+  canvas.width = CARD_W * DPR;
+  canvas.height = CARD_H * DPR;
+  var ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+
+  // ---- 阴影 ----
+  ctx.shadowColor = 'rgba(0,0,0,0.06)';
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 4;
+  roundRect(ctx, 0, 0, CARD_W, CARD_H, 18);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  // ---- 背景（覆盖阴影内部） ----
+  roundRect(ctx, 0, 0, CARD_W, CARD_H, 18);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // ---- 边框 ----
+  ctx.strokeStyle = '#f0ede7';
+  ctx.lineWidth = 1;
+  roundRect(ctx, 0, 0, CARD_W, CARD_H, 18);
+  ctx.stroke();
+
+  // ---- 引号 ----
+  ctx.font = QUOTE_SIZE + 'px Georgia, "Noto Serif CJK SC", serif';
+  ctx.fillStyle = 'rgba(90, 122, 90, 0.18)';
+  ctx.textBaseline = 'top';
+  ctx.fillText('"', 28, 12);
+
+  // ---- 笔记正文 ----
+  ctx.font = FONT_SIZE + 'px "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif';
+  ctx.fillStyle = '#2c2c2c';
+  ctx.textBaseline = 'top';
+
+  var y = PAD_TOP;
+  for (var i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], PAD, y);
+    y += LINE_HEIGHT;
+  }
+
+  // ---- 书名 / 作者 ----
+  if (hasSource) {
+    var sourceY = y + SOURCE_GAP;
+
+    // 分隔线
+    ctx.strokeStyle = '#e8e3da';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD, sourceY);
+    ctx.lineTo(CARD_W - PAD, sourceY);
+    ctx.stroke();
+
+    var labelY = sourceY + SOURCE_LINE_TOP;
+
+    if (note.book) {
+      ctx.font = 'bold 15px -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif';
+      ctx.fillStyle = '#2c2c2c';
+      ctx.textBaseline = 'top';
+      var bookText = '《' + note.book + '》';
+      ctx.fillText(bookText, PAD, labelY);
+
+      if (note.author || note.chapter) {
+        var metaParts = [];
+        if (note.author) metaParts.push(note.author);
+        if (note.chapter) metaParts.push(note.chapter);
+        ctx.font = '13px -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif';
+        ctx.fillStyle = '#8b8579';
+        ctx.textBaseline = 'top';
+        var bookWidth = measureTextWidth(ctx, bookText);
+        ctx.fillText(metaParts.join(' · '), PAD + bookWidth + 12, labelY);
+      }
+    } else if (note.author || note.chapter) {
+      var metaParts = [];
+      if (note.author) metaParts.push(note.author);
+      if (note.chapter) metaParts.push(note.chapter);
+      ctx.font = '13px -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif';
+      ctx.fillStyle = '#2c2c2c';
+      ctx.textBaseline = 'top';
+      ctx.fillText(metaParts.join(' · '), PAD, labelY);
+    }
+  }
+
+  return canvas;
+}
+
+/** 中文文本按字符换行 */
+function wrapChineseText(ctx, text, maxWidth) {
+  if (!text) return [''];
+  var lines = [];
+  var current = '';
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i];
+    var test = current + ch;
+    if (ctx.measureText(test).width > maxWidth && current.length > 0) {
+      lines.push(current);
+      current = ch;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+/** 测量文本宽度 */
+function measureTextWidth(ctx, text) {
+  return ctx.measureText(text).width;
+}
+
+/** Canvas roundRect */
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
 
 // ---- Delete ----
 btnDelete.addEventListener('click', () => {
   if (!currentNote) return;
   showConfirmDialog('确定要删除这条笔记吗？删除后不可恢复。', async () => {
-    // 从数组中移除
     const idx = allNotes.findIndex(n => n.id === currentNote.id);
     if (idx !== -1) {
       allNotes.splice(idx, 1);
@@ -260,7 +395,6 @@ btnDelete.addEventListener('click', () => {
       stats.total = allNotes.length;
       updateFiltered();
       stats.excluded = allNotes.length - filteredNotes.length;
-      // 从 shownIds 中也移除
       shownIds = shownIds.filter(id => id !== currentNote.id);
       showToast('🗑️ 已删除');
       switchToNext();
@@ -299,7 +433,6 @@ btnNext.addEventListener('click', () => switchToNext());
 
 // ---- Keyboard shortcuts ----
 document.addEventListener('keydown', (e) => {
-  // 不处理输入框内的按键
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
   switch (e.key) {
@@ -329,14 +462,13 @@ document.getElementById('goToSettingsFiltered').addEventListener('click', (e) =>
   chrome.runtime.openOptionsPage();
 });
 
-// ---- Listen for storage changes (update if settings changed elsewhere) ----
+// ---- Listen for storage changes ----
 chrome.storage.onChanged.addListener((changes) => {
   if (changes[STORAGE_KEY]) {
     allNotes = changes[STORAGE_KEY].newValue || [];
     stats.total = allNotes.length;
     updateFiltered();
     stats.excluded = allNotes.length - filteredNotes.length;
-    // 如果当前显示的是被删除的笔记，切换到下一条
     if (currentNote && !allNotes.find(n => n.id === currentNote.id)) {
       switchToNext();
     }
