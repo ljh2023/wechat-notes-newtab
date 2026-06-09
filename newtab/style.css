@@ -1,0 +1,333 @@
+/* ============================================
+   微信书摘 · 新标签页 — Style
+   ============================================ */
+
+/* ---- Reset & Base ---- */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #f3f0ea;
+  --card-bg: #ffffff;
+  --text: #2c2c2c;
+  --text-secondary: #8b8579;
+  --text-tertiary: #b8b2a6;
+  --accent: #5a7a5a;
+  --accent-hover: #4a6a4a;
+  --danger: #c0392b;
+  --danger-hover: #a93226;
+  --border: #e8e3da;
+  --shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
+  --radius: 16px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Georgia", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html, body {
+  height: 100%;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ---- State Management ---- */
+.state {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  padding: 32px 24px;
+  animation: fadeIn 0.4s ease;
+}
+
+.state.active {
+  display: flex;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Loading ---- */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.state-hint {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---- Card ---- */
+.card {
+  position: relative;
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 48px 40px 40px;
+  max-width: 640px;
+  width: 100%;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.card-exit {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.98);
+}
+
+.card-enter {
+  animation: cardEnter 0.35s ease forwards;
+}
+
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.card-quote-mark {
+  position: absolute;
+  top: 16px;
+  left: 24px;
+  font-family: var(--font-serif);
+  font-size: 48px;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.25;
+  pointer-events: none;
+  user-select: none;
+}
+
+.card-content {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 1.8;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.card-source {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.card-source .book-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.card-source .book-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+/* ---- Actions ---- */
+.actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  align-items: center;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #f8faf6;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: #fdf2f0;
+}
+
+/* ---- Footer ---- */
+.footer-info {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: var(--text-tertiary);
+  text-align: center;
+  cursor: default;
+}
+
+.footer-info a {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--border);
+  transition: color var(--transition);
+}
+
+.footer-info a:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+/* ---- Empty States ---- */
+.empty-icon {
+  color: var(--text-tertiary);
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.empty-desc {
+  font-size: 15px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.6;
+  max-width: 340px;
+  margin-bottom: 24px;
+}
+
+#state-empty .btn-primary,
+#state-empty-filtered .btn-primary {
+  border: none;
+}
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--text);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ---- Confirmation Dialog (Delete) ---- */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.2s ease;
+}
+
+.confirm-dialog {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+  max-width: 360px;
+  width: 90%;
+}
+
+.confirm-dialog p {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 600px) {
+  .card {
+    padding: 36px 24px 32px;
+  }
+  .card-content {
+    font-size: 18px;
+    line-height: 1.7;
+  }
+  .actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+}

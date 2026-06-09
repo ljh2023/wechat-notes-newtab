@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "微信书摘 · 新标签页",
+  "version": "1.0.0",
+  "description": "每次打开新标签页，展示一条你的微信读书笔记。支持筛选书籍、删除笔记。",
+  "chrome_url_overrides": {
+    "newtab": "newtab/index.html"
+  },
+  "options_ui": {
+    "page": "settings/index.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://i.weread.qq.com/*"
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

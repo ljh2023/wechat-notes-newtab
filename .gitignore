@@ -1,0 +1,5 @@
+# 微信书摘 · Chrome 新标签页扩展
+
+.DS_Store
+*.log
+node_modules/
