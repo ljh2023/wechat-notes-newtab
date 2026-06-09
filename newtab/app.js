@@ -491,18 +491,13 @@ document.addEventListener('keydown', (e) => {
 
   switch (e.key) {
     case 'ArrowRight':
-    case 'n':
+    case ' ':
       e.preventDefault();
       btnNext.click();
       break;
     case 'ArrowLeft':
-    case 'p':
       e.preventDefault();
       btnPrev.click();
-      break;
-    case ' ':
-      e.preventDefault();
-      btnNext.click();
       break;
     case 'c':
       btnCopy.click();
