@@ -13,13 +13,6 @@ let allNotes = [];
 let excludeBooks = [];
 
 // ---- DOM refs ----
-const fileInput     = document.getElementById('fileInput');
-const uploadArea    = document.getElementById('uploadArea');
-const jsonInput     = document.getElementById('jsonInput');
-const btnImport     = document.getElementById('btnImport');
-const importResult  = document.getElementById('importResult');
-const showSample    = document.getElementById('showSample');
-const sampleFormat  = document.getElementById('sampleFormat');
 const bookList      = document.getElementById('bookList');
 const statsTotal    = document.getElementById('statTotal');
 const statsActive   = document.getElementById('statActive');
@@ -69,77 +62,6 @@ async function saveApiKey(key) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ [API_KEY_STORAGE]: key }, resolve);
   });
-}
-
-// ---- Import Notes ----
-function parseAndImport(jsonStr) {
-  let data;
-  try {
-    data = JSON.parse(jsonStr);
-  } catch (e) {
-    showImportResult('❌ JSON 解析失败：' + e.message, 'error');
-    return;
-  }
-
-  // 支持数组（多条笔记）或单条笔记对象
-  let notes = Array.isArray(data) ? data : [data];
-
-  if (!notes.length) {
-    showImportResult('❌ 导入的数据为空', 'error');
-    return;
-  }
-
-  // 校验每条笔记至少包含 id 和 content
-  const valid = [];
-  const errors = [];
-  notes.forEach((n, i) => {
-    if (!n.id || !n.content) {
-      errors.push(`第 ${i + 1} 条缺少 id 或 content 字段`);
-    } else {
-      valid.push({
-        id: String(n.id),
-        content: String(n.content).trim(),
-        book: n.book || '',
-        author: n.author || '',
-        chapter: n.chapter || '',
-        createTime: n.createTime || '',
-      });
-    }
-  });
-
-  if (!valid.length) {
-    showImportResult('❌ 没有有效的笔记数据。每条笔记至少需要 id 和 content 字段。', 'error');
-    return;
-  }
-
-  // 按 id 去重（保留新导入的）
-  const existingIds = new Set(allNotes.map(n => n.id));
-  let added = 0;
-  valid.forEach(n => {
-    if (!existingIds.has(n.id)) {
-      allNotes.push(n);
-      existingIds.add(n.id);
-      added++;
-    }
-  });
-
-  // 更新排除列表：如果有新书
-  const bookSet = new Set(allNotes.map(n => n.book).filter(Boolean));
-  excludeBooks = excludeBooks.filter(b => bookSet.has(b));
-
-  saveData().then(() => {
-    showImportResult(
-      `✅ 导入成功！新增 ${added} 条笔记，跳过 ${valid.length - added} 条重复。当前共 ${allNotes.length} 条笔记。`,
-      'success'
-    );
-    refreshUI();
-    jsonInput.value = '';
-  });
-}
-
-function showImportResult(msg, type) {
-  importResult.textContent = msg;
-  importResult.className = 'import-result ' + type;
 }
 
 // ---- Build book list ----
@@ -246,60 +168,6 @@ async function init() {
 }
 
 // ---- Events ----
-
-// 导入按钮
-btnImport.addEventListener('click', () => {
-  const text = jsonInput.value.trim();
-  if (!text) {
-    showImportResult('⚠️ 请先粘贴 JSON 数据', 'error');
-    return;
-  }
-  parseAndImport(text);
-});
-
-// 上传文件
-uploadArea.addEventListener('click', () => fileInput.click());
-
-uploadArea.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  uploadArea.classList.add('dragover');
-});
-uploadArea.addEventListener('dragleave', () => {
-  uploadArea.classList.remove('dragover');
-});
-uploadArea.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadArea.classList.remove('dragover');
-  const files = e.dataTransfer.files;
-  if (files.length) handleFile(files[0]);
-});
-
-fileInput.addEventListener('change', () => {
-  if (fileInput.files.length) handleFile(fileInput.files[0]);
-  fileInput.value = '';
-});
-
-function handleFile(file) {
-  if (!file.name.endsWith('.json')) {
-    showImportResult('⚠️ 请上传 .json 文件', 'error');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    jsonInput.value = e.target.result;
-    parseAndImport(e.target.result);
-  };
-  reader.onerror = () => {
-    showImportResult('❌ 文件读取失败', 'error');
-  };
-  reader.readAsText(file);
-}
-
-// 显示示例格式
-showSample.addEventListener('click', (e) => {
-  e.preventDefault();
-  sampleFormat.style.display = sampleFormat.style.display === 'none' ? 'block' : 'none';
-});
 
 // 清空数据
 btnClearAll.addEventListener('click', () => {

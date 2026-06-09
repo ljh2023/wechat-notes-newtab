@@ -52,69 +52,6 @@
       <p class="sync-hint">💡 API Key 仅保存在本地浏览器中，不会上传到任何服务器。</p>
     </section>
 
-    <!-- ===== 导入 ===== -->
-    <section class="section" id="section-import">
-      <h2 class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        导入笔记
-      </h2>
-      <p class="section-desc">将微信读书笔记以 JSON 格式导入。支持直接粘贴或上传文件。</p>
-
-      <!-- 文件上传 -->
-      <div class="upload-area" id="uploadArea">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        <p>点击选择 JSON 文件上传，或拖拽到此处</p>
-        <input type="file" id="fileInput" accept=".json,application/json" hidden />
-      </div>
-
-      <div class="divider"><span>或</span></div>
-
-      <!-- 粘贴 -->
-      <div class="paste-area">
-        <label class="label" for="jsonInput">粘贴 JSON：</label>
-        <textarea id="jsonInput" rows="8" placeholder='[
-  {
-    "id": "uuid",
-    "content": "笔记内容",
-    "book": "书名",
-    "author": "作者",
-    "chapter": "章节",
-    "createTime": "2024-01-01"
-  }
-]'></textarea>
-        <div class="paste-actions">
-          <button class="btn btn-primary" id="btnImport">导入</button>
-          <a href="#" class="sample-link" id="showSample">查看示例格式</a>
-        </div>
-      </div>
-
-      <div id="importResult" class="import-result"></div>
-
-      <!-- 示例格式 -->
-      <div id="sampleFormat" class="sample-box" style="display:none;">
-        <pre><code>[
-  {
-    "id": "1690000000001",
-    "content": "人的认知边界决定了其解决问题的上限。",
-    "book": "认知觉醒",
-    "author": "周岭",
-    "chapter": "第四章",
-    "createTime": "2024-01-15"
-  },
-  {
-    "id": "1690000000002",
-    "content": "真正的行动力来自于清晰的目标和明确的路径。",
-    "book": "认知觉醒",
-    "author": "周岭",
-    "chapter": "第五章"
-  }
-]</code></pre>
-        <p class="sample-note">必需字段：<code>id</code>、<code>content</code>。<br>
-        推荐字段：<code>book</code>、<code>author</code>、<code>chapter</code>、<code>createTime</code>。<br>
-        <code>id</code> 可以传时间戳或 UUID，用于去重。</p>
-      </div>
-    </section>
-
     <!-- ===== 排除书籍 ===== -->
     <section class="section" id="section-exclude">
       <h2 class="section-title">

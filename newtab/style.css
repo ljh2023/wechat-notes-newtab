@@ -100,6 +100,11 @@ a {
   transform: translateY(-12px) scale(0.98);
 }
 
+.card-exit-prev {
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+}
+
 .card-enter {
   animation: cardEnter 0.35s ease forwards;
 }
@@ -183,6 +188,12 @@ a {
 
 .btn:active {
   transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
 }
 
 .btn-primary {

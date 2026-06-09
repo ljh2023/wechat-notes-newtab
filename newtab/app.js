@@ -35,6 +35,7 @@ const card         = document.getElementById('card');
 
 const btnCopy      = document.getElementById('btnCopy');
 const btnNext      = document.getElementById('btnNext');
+const btnPrev      = document.getElementById('btnPrev');
 const btnDelete    = document.getElementById('btnDelete');
 const toast        = document.getElementById('toast');
 
@@ -42,6 +43,7 @@ const toast        = document.getElementById('toast');
 let allNotes = [];
 let filteredNotes = [];
 let shownIds = [];
+let noteHistory = [];  // 浏览历史（上一条用）
 let currentNote = null;
 let excludeBooks = [];
 let stats = { total: 0, excluded: 0 };
@@ -137,10 +139,43 @@ function escapeHTML(str) {
   return div.innerHTML;
 }
 
-// ---- Switch to next note (with animation) ----
+// ---- 动画切换卡片 ----
+function animateCardTransition(note, direction) {
+  card.classList.remove('card-enter');
+  if (direction === 'prev') {
+    card.classList.add('card-exit-prev');
+  } else {
+    card.classList.add('card-exit');
+  }
+
+  setTimeout(() => {
+    renderNote(note);
+    card.classList.remove('card-exit', 'card-exit-prev');
+    void card.offsetWidth;
+    card.classList.add('card-enter');
+    // 更新上下一条按钮状态
+    updateNavButtons();
+  }, 250);
+}
+
+// ---- 下一条 ----
 function switchToNext() {
+  // 把当前笔记压入历史栈
+  if (currentNote) {
+    noteHistory.push(currentNote);
+  }
+
   const next = pickNext();
   if (!next) {
+    if (noteHistory.length > 0) {
+      // 没有可用笔记了，退回上一条
+      const prev = noteHistory.pop();
+      if (prev) {
+        currentNote = prev;
+        animateCardTransition(prev, 'prev');
+        return;
+      }
+    }
     if (excludeBooks.length > 0 && allNotes.length > 0) {
       showState('filtered');
     } else {
@@ -150,15 +185,31 @@ function switchToNext() {
     return;
   }
 
-  card.classList.add('card-exit');
-  card.classList.remove('card-enter');
+  animateCardTransition(next, 'next');
+}
 
-  setTimeout(() => {
-    renderNote(next);
-    card.classList.remove('card-exit');
-    void card.offsetWidth;
-    card.classList.add('card-enter');
-  }, 250);
+// ---- 上一条 ----
+function switchToPrev() {
+  if (noteHistory.length === 0) return;
+
+  // 当前笔记放回 shownIds 以便以后还能随机到
+  if (currentNote) {
+    shownIds = shownIds.filter(id => id !== currentNote.id);
+  }
+
+  const prev = noteHistory.pop();
+  if (prev) {
+    animateCardTransition(prev, 'prev');
+  }
+}
+
+// ---- 更新按钮状态 ----
+function updateNavButtons() {
+  if (btnPrev) {
+    btnPrev.disabled = noteHistory.length === 0;
+    btnPrev.style.opacity = noteHistory.length === 0 ? '0.35' : '1';
+    btnPrev.style.pointerEvents = noteHistory.length === 0 ? 'none' : 'auto';
+  }
 }
 
 // ---- Init ----
@@ -431,6 +482,9 @@ function showConfirmDialog(message, onConfirm) {
 // ---- Next ----
 btnNext.addEventListener('click', () => switchToNext());
 
+// ---- Prev ----
+btnPrev.addEventListener('click', () => switchToPrev());
+
 // ---- Keyboard shortcuts ----
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -438,6 +492,14 @@ document.addEventListener('keydown', (e) => {
   switch (e.key) {
     case 'ArrowRight':
     case 'n':
+      e.preventDefault();
+      btnNext.click();
+      break;
+    case 'ArrowLeft':
+    case 'p':
+      e.preventDefault();
+      btnPrev.click();
+      break;
     case ' ':
       e.preventDefault();
       btnNext.click();
