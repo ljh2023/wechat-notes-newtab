@@ -301,7 +301,7 @@ function renderNoteCard(note) {
   var textHeight = lines.length * LINE_HEIGHT;
 
   var hasSource = !!(note.book || note.author || note.chapter);
-  var sourceHeight = hasSource ? 48 : 0;
+  var sourceHeight = hasSource ? 68 : 0;
 
   var CARD_H = PAD_TOP + textHeight + SOURCE_GAP + sourceHeight + BOTTOM_PAD;
 
@@ -379,8 +379,8 @@ function renderNoteCard(note) {
         ctx.font = '13px -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif';
         ctx.fillStyle = '#8b8579';
         ctx.textBaseline = 'top';
-        var bookWidth = measureTextWidth(ctx, bookText);
-        ctx.fillText(metaParts.join(' · '), PAD + bookWidth + 12, labelY);
+        // 换行显示，不与书名同行
+        ctx.fillText(metaParts.join(' · '), PAD, labelY + 22);
       }
     } else if (note.author || note.chapter) {
       var metaParts = [];
