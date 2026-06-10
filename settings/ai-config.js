@@ -190,6 +190,48 @@ async function processWeChatNote(note) {
   };
 }
 
+// 结构化提取：从 Obsidian 笔记直接提取 QA（- [ ] 问题 + > [!tip] 答案）
+function extractStructuredQA(note) {
+  var content = note.content || '';
+  var lines = content.split('\n');
+  var qas = [];
+  var currentQ = null;
+  var inAnswer = false;
+  var answerLines = [];
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    // 匹配 - [ ] 或 - [x] 问题行
+    var taskMatch = line.match(/^\s*[-*]\s*\[[ x]\]\s*(.*)/);
+    if (taskMatch) {
+      // 保存上一个 Q&A
+      if (currentQ && answerLines.length > 0) {
+        qas.push({ question: currentQ, answer: answerLines.join('\n').trim() });
+      }
+      currentQ = taskMatch[1].trim();
+      answerLines = [];
+      inAnswer = false;
+    } else if (line.match(/^\s*>?\s*\[!tip\]/i) || line.match(/^\s*>?\s*\[!note\]/i) || line.match(/^\s*>?\s*\[!summary\]/i)) {
+      inAnswer = true;
+    } else if (inAnswer) {
+      if (line.trim() === '' || line.startsWith('- [')) {
+        // 空行或新任务结束答案块
+        inAnswer = false;
+      } else {
+        // 去掉 > 前缀和 <font> 等格式标签
+        var cleaned = line.replace(/^>\s*/, '').replace(/<[^>]+>/g, '').trim();
+        if (cleaned) answerLines.push(cleaned);
+      }
+    }
+  }
+  // 保存最后一个
+  if (currentQ && answerLines.length > 0) {
+    qas.push({ question: currentQ, answer: answerLines.join('\n').trim() });
+  }
+
+  return qas;
+}
+
 // 规则切分 Markdown 文档（浏览模式：不耗 token）
 function splitMDDocForBrowse(note) {
   var content = note.content || '';
@@ -304,8 +346,9 @@ async function runAIPipeline(onProgress) {
   _pipelineCancelled = false;
 
   var allData = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled'], function(r) { resolve(r); });
+    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_structured_extract'], function(r) { resolve(r); });
   });
+  var useStructured = allData.wx_structured_extract === true;
   var notes = allData.wx_notes || [];
   if (!notes.length) throw new Error('没有笔记可供处理');
 
@@ -367,8 +410,19 @@ async function runAIPipeline(onProgress) {
       var srcType = note.source || 'weread';
       // 知识提取：Markdown 用规则切分（不耗 token），WeChat 用 AI
       var knowledges = srcType === 'markdown' ? splitMDDocForBrowse(note) : [note.content || ''];
-      // 用 AI 生成 QA/Choice 题目
-      var processed = srcType === 'markdown' ? await processMDDoc(note) : await processWeChatNote(note);
+      // 生成 QA/Choice 题目：结构化提取优先
+      var qaItems = [];
+      var choiceItems = [];
+      if (srcType === 'markdown' && useStructured) {
+        // 结构化提取：直接从 - [ ] 任务列表取 QA
+        qaItems = extractStructuredQA(note);
+        // 选择题需要 AI 生成（或者跳过）
+      } else {
+        // AI 生成
+        var processed = srcType === 'markdown' ? await processMDDoc(note) : await processWeChatNote(note);
+        qaItems = processed.qa || [];
+        choiceItems = processed.choices || [];
+      }
 
       // 出处信息
       var sourceParts = [];
@@ -389,14 +443,14 @@ async function runAIPipeline(onProgress) {
       });
 
       // Q&A：最多 MAX_QA 条
-      processed.qa.forEach(function(item) {
+      qaItems.forEach(function(item) {
         if (qaCount >= MAX_QA) return;
         results.push({ type: 'qa', sourceNoteId: note.id, srcType: srcType, data: { question: item.question, answer: item.answer, source: sourceStr } });
         qaCount++;
       });
 
       // Choice：最多 MAX_CHOICE 条
-      processed.choices.forEach(function(item) {
+      choiceItems.forEach(function(item) {
         if (choiceCount >= MAX_CHOICE) return;
         results.push({
           type: 'choice', sourceNoteId: note.id, srcType: srcType,

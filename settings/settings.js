@@ -659,6 +659,17 @@ function initCacheSettings() {
       stopBtn.textContent = '⏹ 正在停止...';
     });
 
+    // 结构化提取开关
+    var structCheck = document.getElementById('structuredExtract');
+    if (structCheck) {
+      chrome.storage.local.get(['wx_structured_extract'], function(d) {
+        structCheck.checked = d.wx_structured_extract === true;
+      });
+      structCheck.addEventListener('change', function() {
+        chrome.storage.local.set({ wx_structured_extract: structCheck.checked });
+      });
+    }
+
     // 生成/停止后刷新缓存状态
     refreshCacheStatus();
     // 监听存储变化自动刷新
