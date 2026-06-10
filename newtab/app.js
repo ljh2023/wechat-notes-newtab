@@ -338,10 +338,28 @@ function addBrowseLog(type, detail) {
 }
 
 function loadNextInMode() {
-  if (currentMode === 'browse') {
-    switchToNext();
-    return;
+  if (aiCache.length > 0) {
+    if (typeof cacheIndex !== 'number') cacheIndex = 0;
+    if (cacheIndex >= aiCache.length) cacheIndex = 0;
+
+    // 浏览模式优先用 AI 知识点
+    if (currentMode === 'browse') {
+      var startIdx = cacheIndex;
+      for (var tries = 0; tries < aiCache.length; tries++) {
+        var idx = (startIdx + tries) % aiCache.length;
+        if (aiCache[idx].type === 'knowledge') {
+          _currentCacheIdx = idx;
+          displayKnowledgeItem(aiCache[idx].data);
+          return;
+        }
+      }
+      // 没有 knowledge 类型，回退到原始笔记
+      switchToNext();
+      return;
+    }
   }
+
+  // QA/Choice 模式
   if (aiCache.length > 0) {
     if (typeof cacheIndex !== 'number') cacheIndex = 0;
     if (cacheIndex >= aiCache.length) cacheIndex = 0;
@@ -391,6 +409,25 @@ async function persistCache() {
 
 async function saveCacheIndex() {
   await new Promise(function(r) { chrome.storage.local.set({ wx_cache_index: cacheIndex }, r); });
+}
+
+// 显示 AI 知识点（浏览模式专用）
+function displayKnowledgeItem(data) {
+  showState('display');
+  currentNote = { content: data.content, book: data.source, source: 'markdown' };
+  if (data.source) {
+    noteSource.innerHTML = '<div class="book-name">📖 ' + data.source + '</div>';
+  } else {
+    noteSource.innerHTML = '';
+  }
+  noteContent.textContent = data.content || '(无内容)';
+  noteContent.classList.add('plain');
+  card.classList.remove('card-enter');
+  void card.offsetWidth;
+  card.classList.add('card-enter');
+  // 推进索引避免重复
+  cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
+  saveCacheIndex();
 }
 
 // 答对→移除，答错→保留轮转
@@ -704,7 +741,13 @@ function showConfirmDialog(message, onConfirm) {
 }
 
 // ---- Next ----
-btnNext.addEventListener('click', () => switchToNext());
+btnNext.addEventListener('click', () => {
+  if (aiCache.some(function(item) { return item.type === 'knowledge'; })) {
+    loadNextInMode();
+  } else {
+    switchToNext();
+  }
+});
 
 // ---- Prev ----
 btnPrev.addEventListener('click', () => switchToPrev());

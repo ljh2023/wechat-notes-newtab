@@ -137,7 +137,7 @@ function initAiConfig() {
    ============================================ */
 
 // 调用 DeepSeek API
-async function callAI(promptText, systemPrompt) {
+async function callAI(promptText, systemPrompt, maxOutTokens) {
   var cfg = await loadAiConfig();
   if (!cfg || !cfg.endpoint || !cfg.apiKey || !cfg.model) {
     throw new Error('AI 接口未配置完整');
@@ -154,7 +154,7 @@ async function callAI(promptText, systemPrompt) {
         { role: 'system', content: systemPrompt || '你是一个知识提取助手。请用中文回答。' },
         { role: 'user', content: promptText }
       ],
-      max_tokens: 300,
+      max_tokens: maxOutTokens || 1000,
       temperature: 0.3
     })
   });
@@ -166,29 +166,75 @@ async function callAI(promptText, systemPrompt) {
   return data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '';
 }
 
-// 处理单条笔记
-async function processNote(note) {
-  var prompt = '请根据以下笔记内容，提取一个知识点，并以JSON格式返回（只返回JSON，不要其他文字）：\n';
-  prompt += '{\n  "summary": "一句话摘要（50字以内）",\n';
-  prompt += '  "qa": { "question": "关于此知识点的思考题", "answer": "答案" },\n';
-  prompt += '  "choice": { "question": "关于此知识点的选择题题干", "options": ["A选项", "B选项", "C选项", "D选项"], "correct": 0 }\n}\n\n';
-  prompt += '笔记内容（可能较长，只提取对生成题目有用的关键信息即可）：\n' + (note.content || '');
+// 从回复中提取 JSON
+function extractJSON(reply) {
+  var m = reply.match(/\[[\s\S]*\]/);
+  if (m) return JSON.parse(m[0]);
+  m = reply.match(/\{[\s\S]*\}/);
+  if (m) return JSON.parse(m[0]);
+  throw new Error('AI 返回非 JSON：' + reply.slice(0, 100));
+}
 
-  var reply = await callAI(prompt, '你是一个知识提取助手。只返回JSON，不要任何其他文字。JSON必须包含summary、qa、choice三个字段。');
-  // 尝试提取 JSON
-  var jsonMatch = reply.match(/\{[\s\S]*\}/);
-  if (jsonMatch) reply = jsonMatch[0];
-  var parsed;
-  try {
-    parsed = JSON.parse(reply);
-  } catch (e) {
-    throw new Error('AI 返回非 JSON：' + reply.slice(0, 100));
-  }
+// 处理 WeChat 笔记（已是单个知识点）
+async function processWeChatNote(note) {
+  var prompt = '请根据以下笔记内容，生成一条精炼摘要和一个问答对、一个选择题，JSON返回（只返回JSON）：\n';
+  prompt += '{"summary":"一句话摘要","qa":{"question":"思考题","answer":"答案"},"choice":{"question":"题干","options":["A","B","C","D"],"correct":0}}\n\n';
+  prompt += '内容：' + (note.content || '').slice(0, 2000);
+
+  var reply = await callAI(prompt, '你是知识提取助手。只返回JSON。', 500);
+  var parsed = extractJSON(reply);
   return {
-    summary: parsed.summary || '',
-    qa: parsed.qa || { question: '', answer: '' },
-    choice: parsed.choice || { question: '', options: [], correct: 0 }
+    knowledges: [parsed.summary || note.content.slice(0, 200)],
+    qa: parsed.qa ? [{ question: parsed.qa.question, answer: parsed.qa.answer }] : [],
+    choices: parsed.choice ? [{ question: parsed.choice.question, options: parsed.choice.options, correct: parsed.choice.correct }] : []
   };
+}
+
+// 处理 Markdown 文档（提取多个知识点）
+async function processMDDoc(note) {
+  var content = (note.content || '').slice(0, 16000);
+  var prompt = '你是一个知识提取专家。请阅读以下文档，提取出其中的核心知识点。\n';
+  prompt += '每个知识点用1-2句话概括。请以JSON数组格式返回，每个元素包含：\n';
+  prompt += '{"knowledge":"知识点内容（精简完整）"}\n\n';
+  prompt += '最多提取10个知识点。如果内容少于3段，只提取主要的1-2个即可。\n\n';
+  prompt += '文档内容：\n' + content;
+
+  var reply = await callAI(prompt, '你是知识提取专家。只返回JSON数组，不要其他文字。格式：[{"knowledge":"..."},{"knowledge":"..."}]', 2000);
+  var parsed = extractJSON(reply);
+  if (!Array.isArray(parsed)) throw new Error('AI 未返回数组');
+
+  // 从每个知识点生成QA和选择题（最多各20）
+  var knowledges = [], qas = [], choices = [];
+  parsed.forEach(function(item) {
+    var k = (item.knowledge || '').trim();
+    if (k) knowledges.push(k);
+  });
+  if (!knowledges.length) knowledges = [(note.content || '').slice(0, 200)];
+
+  // 批量从知识点生成题目
+  if (knowledges.length > 0) {
+    var qPrompt = '根据以下知识点，为每个知识点生成一个问答对和一个四选一选择题。\n';
+    qPrompt += 'JSON数组格式：[{"qa":{"question":"问题","answer":"答案"},"choice":{"question":"题干","options":["A","B","C","D"],"correct":0}}]\n\n';
+    qPrompt += '知识点列表：\n';
+    knowledges.forEach(function(k, i) { qPrompt += (i+1) + '. ' + k + '\n'; });
+
+    try {
+      var qReply = await callAI(qPrompt, '只返回JSON数组', 2000);
+      var qParsed = extractJSON(qReply);
+      if (Array.isArray(qParsed)) {
+        qParsed.forEach(function(item) {
+          if (item.qa && item.qa.question) qas.push({ question: item.qa.question, answer: item.qa.answer || '' });
+          if (item.choice && item.choice.question && item.choice.options) {
+            choices.push({ question: item.choice.question, options: item.choice.options, correct: item.choice.correct || 0 });
+          }
+        });
+      }
+    } catch (e) {
+      // 题目生成失败不阻塞，知识点的储存不受影响
+    }
+  }
+
+  return { knowledges: knowledges, qa: qas, choices: choices };
 }
 
 // 批量处理，填充缓存
@@ -259,7 +305,9 @@ async function runAIPipeline(onProgress) {
     try {
       var note = batch[i];
       if (onProgress) onProgress(i + 1, batch.length, note.book || note.id.slice(0, 8));
-      var processed = await processNote(note);
+      var srcType = note.source || 'weread';
+      var processed = srcType === 'markdown' ? await processMDDoc(note) : await processWeChatNote(note);
+
       // 出处信息
       var sourceParts = [];
       if (note.book) sourceParts.push('《' + note.book + '》');
@@ -267,39 +315,35 @@ async function runAIPipeline(onProgress) {
       if (note.chapter) sourceParts.push(note.chapter);
       if (!note.book && note.filePath) sourceParts.push(note.filePath);
       var sourceStr = sourceParts.join(' · ') || '';
-      var srcType = note.source || 'weread'; // 'weread' or 'markdown'
 
-      var entry = {
-        type: 'summary',
-        sourceNoteId: note.id,
-        srcType: srcType,
-        data: { summary: processed.summary, source: sourceStr }
-      };
-      results.push(entry);
-      // Q&A
-      if (processed.qa && processed.qa.question) {
+      // 浏览模式：所有知识点都存
+      processed.knowledges.forEach(function(k) {
         results.push({
-          type: 'qa',
+          type: 'knowledge',
           sourceNoteId: note.id,
           srcType: srcType,
-          data: { question: processed.qa.question, answer: processed.qa.answer, source: sourceStr }
+          data: { content: k, source: sourceStr }
         });
-      }
-      // Choice
-      if (processed.choice && processed.choice.question && processed.choice.options.length >= 2) {
+      });
+
+      // Q&A：最多 MAX_QA 条
+      processed.qa.forEach(function(item) {
+        if (qaCount >= MAX_QA) return;
+        results.push({ type: 'qa', sourceNoteId: note.id, srcType: srcType, data: { question: item.question, answer: item.answer, source: sourceStr } });
+        qaCount++;
+      });
+
+      // Choice：最多 MAX_CHOICE 条
+      processed.choices.forEach(function(item) {
+        if (choiceCount >= MAX_CHOICE) return;
         results.push({
-          type: 'choice',
-          sourceNoteId: note.id,
-          srcType: srcType,
-          data: {
-            question: processed.choice.question,
-            source: sourceStr,
-            options: processed.choice.options.map(function(opt, idx) {
-              return { label: opt, correct: idx === processed.choice.correct };
-            })
+          type: 'choice', sourceNoteId: note.id, srcType: srcType,
+          data: { question: item.question, source: sourceStr,
+            options: (item.options || []).map(function(opt, idx) { return { label: opt, correct: idx === (item.correct || 0) }; })
           }
         });
-      }
+        choiceCount++;
+      });
       await addAiLog({ type: 'process', status: 'ok', noteId: note.id.slice(0, 16), book: note.book || '' });
     } catch (e) {
       await addAiLog({ type: 'process', status: 'error', noteId: note.id.slice(0, 16), error: e.message });
