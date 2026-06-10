@@ -34,7 +34,7 @@ async function recordAnswer(correct) {
   await saveReviewStats(stats);
 }
 
-function renderQAMode(data) {
+function renderQAMode(data, onResult) {
   hideAllStates();
   const state = document.getElementById('state-qa');
   if (!state) return;
@@ -42,11 +42,8 @@ function renderQAMode(data) {
 
   document.getElementById('qaQuestion').textContent = data.question || '(问题内容不可用)';
 
-  // 出处
   const sourceEl = document.getElementById('qaSource');
-  if (sourceEl) {
-    sourceEl.textContent = data.source || '';
-  }
+  if (sourceEl) sourceEl.textContent = data.source || '';
 
   const showBtn = document.getElementById('qaShowAnswer');
   const answerDiv = document.getElementById('qaAnswer');
@@ -65,15 +62,17 @@ function renderQAMode(data) {
     document.getElementById('feedbackCorrect').onclick = async () => {
       await recordAnswer(true);
       feedbackDiv.innerHTML = '<span style="color:var(--accent);font-weight:600;">太棒了！继续加油！</span>';
+      if (onResult) onResult(true);
     };
     document.getElementById('feedbackWrong').onclick = async () => {
       await recordAnswer(false);
       feedbackDiv.innerHTML = '<span style="color:var(--danger);font-weight:600;">没关系，下次一定！</span>';
+      if (onResult) onResult(false);
     };
   };
 }
 
-function renderChoiceMode(data) {
+function renderChoiceMode(data, onResult) {
   hideAllStates();
   const state = document.getElementById('state-choice');
   if (!state) return;
@@ -110,6 +109,7 @@ function renderChoiceMode(data) {
         resultDiv.style.color = 'var(--accent-hover)';
         resultDiv.innerHTML = '回答正确！';
         await recordAnswer(true);
+        if (onResult) onResult(true);
       } else {
         btn.classList.add('wrong');
         optionsDiv.querySelectorAll('.choice-opt').forEach((b, i) => {
@@ -120,6 +120,7 @@ function renderChoiceMode(data) {
         resultDiv.style.color = 'var(--danger)';
         resultDiv.textContent = '答错了，正确答案是 ' + String.fromCharCode(65 + options.findIndex(o => o.correct));
         await recordAnswer(false);
+        if (onResult) onResult(false);
       }
     };
     optionsDiv.appendChild(btn);

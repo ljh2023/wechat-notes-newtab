@@ -54,6 +54,7 @@ let stats = { total: 0, excluded: 0 };
 let currentMode = 'browse';
 let aiCache = [];
 let cacheIndex = 0;
+let _currentCacheIdx = -1;
 let sourceEnabled = {};
 
 // ---- Show/hide states ----
@@ -334,7 +335,7 @@ function loadNextInMode() {
     return;
   }
   if (aiCache.length > 0) {
-    // 循环制：从当前位置往后找匹配类型的条目
+    // 从当前位置往后找匹配类型的条目
     if (typeof cacheIndex !== 'number') cacheIndex = 0;
     if (cacheIndex >= aiCache.length) cacheIndex = 0;
     var startIdx = cacheIndex;
@@ -342,14 +343,12 @@ function loadNextInMode() {
       var idx = (startIdx + tries) % aiCache.length;
       var item = aiCache[idx];
       if ((currentMode === 'qa' && item.type === 'qa') || (currentMode === 'choice' && item.type === 'choice')) {
-        cacheIndex = (idx + 1) % aiCache.length;
-        saveCacheIndex();
-        if (currentMode === 'qa') renderQAMode(item.data);
-        else renderChoiceMode(item.data);
+        _currentCacheIdx = idx;
+        if (currentMode === 'qa') renderQAMode(item.data, onAnswerResult);
+        else renderChoiceMode(item.data, onAnswerResult);
         return;
       }
     }
-    // 没有匹配类型的条目，回退
   }
   // 无 AI 缓存时检测配置状态并提示
   chrome.storage.local.get(['wx_ai_config'], function(r) {
@@ -365,8 +364,33 @@ function loadNextInMode() {
   });
 }
 
+async function persistCache() {
+  await new Promise(function(r) { chrome.storage.local.set({ [CACHE_KEY]: aiCache }, r); });
+}
+
 async function saveCacheIndex() {
   await new Promise(function(r) { chrome.storage.local.set({ wx_cache_index: cacheIndex }, r); });
+}
+
+// 答对→移除，答错→保留轮转
+function onAnswerResult(correct) {
+  if (!aiCache.length) return;
+  if (_currentCacheIdx < 0) return;
+  if (correct) {
+    aiCache.splice(_currentCacheIdx, 1);
+    persistCache();
+    cacheIndex = Math.min(_currentCacheIdx, aiCache.length - 1);
+    if (cacheIndex < 0) cacheIndex = 0;
+    addBrowseLog('cache', '答对移除，剩余 ' + aiCache.length + ' 条');
+    if (aiCache.length === 0) {
+      addBrowseLog('cache', '缓存已全部答对清空');
+    }
+  } else {
+    cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
+    addBrowseLog('cache', '答错保留，下次循环');
+  }
+  saveCacheIndex();
+  _currentCacheIdx = -1;
 }
 
 async function restoreState() {
