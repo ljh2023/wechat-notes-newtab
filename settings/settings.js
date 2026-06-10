@@ -488,8 +488,17 @@ function deleteSource(name, btn) {
   btn.disabled = true;
 
   chrome.storage.local.get(['wx_notes', 'wx_md_sources'], function(data) {
-    // 删除该来源的笔记
-    var notes = (data.wx_notes || []).filter(function(n) { return !(n.source === 'markdown' && n.book === name); });
+    var notes;
+    var sourceKey;
+    if (name === '微信读书') {
+      // 删除所有非 markdown 的笔记
+      notes = (data.wx_notes || []).filter(function(n) { return n.source === 'markdown'; });
+      sourceKey = 'weread';
+    } else {
+      // 删除该 MD 来源的笔记
+      notes = (data.wx_notes || []).filter(function(n) { return !(n.source === 'markdown' && n.book === name); });
+      sourceKey = 'md_' + name;
+    }
     // 删除来源记录
     var sources = (data.wx_md_sources || []).filter(function(s) { return s.name !== name; });
 
@@ -501,7 +510,7 @@ function deleteSource(name, btn) {
       // 同步清除该来源的 sourceEnabled 记录
       chrome.storage.local.get(['wx_source_enabled'], function(d) {
         var en = d.wx_source_enabled || {};
-        delete en['md_' + name];
+        delete en[sourceKey];
         chrome.storage.local.set({ wx_source_enabled: en });
       });
       refreshUI();

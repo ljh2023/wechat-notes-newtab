@@ -90,10 +90,13 @@
             <div class="source-name">微信读书</div>
             <div class="source-meta" id="sourceMetaWeread">0 条笔记 · 0 本书</div>
           </div>
-          <label class="toggle" style="margin-left:auto;">
-            <input type="checkbox" class="source-toggle" data-source="weread" checked />
-            <span class="slider"></span>
-          </label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="btn btn-small" data-delname="微信读书" style="color:var(--danger);padding:2px 8px;font-size:11px;border-color:transparent;">🗑️</button>
+            <label class="toggle">
+              <input type="checkbox" class="source-toggle" data-source="weread" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
         </div>
       </div>
       <p class="source-status" id="sourceIndicator" style="display:none;"></p>
@@ -193,11 +196,6 @@
             <span id="cacheCount" style="font-weight:600;min-width:20px;text-align:center;">20</span>
             <button class="btn btn-small" id="cacheInc" style="padding:2px 10px;">+</button>
           </div>
-        </div>
-        <div class="sync-step">
-          <span class="step-num">3</span>
-          <span>缓存剩余 5 条时自动补充</span>
-          <span style="margin-left:auto;font-size:12px;color:var(--accent);">✅ 已开启</span>
         </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:12px;">
