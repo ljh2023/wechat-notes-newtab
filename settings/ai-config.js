@@ -190,7 +190,65 @@ async function processWeChatNote(note) {
   };
 }
 
-// 处理 Markdown 文档（提取多个知识点）
+// 规则切分 Markdown 文档（浏览模式：不耗 token）
+function splitMDDocForBrowse(note) {
+  var content = note.content || '';
+  var knowledges = [];
+
+  // 1. 按 Obsidian 任务列表切分：- [ ] 或 - [x] 开头的行为一个知识点
+  var lines = content.split('\n');
+  var current = [];
+  var inTask = false;
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var taskMatch = line.match(/^\s*[-*]\s*\[[ x]\]\s*(.*)/);
+    if (taskMatch) {
+      // 遇到新的任务项，保存上一个
+      if (inTask && current.length > 0) {
+        knowledges.push(current.join('\n').trim());
+      }
+      current = [line];
+      inTask = true;
+    } else if (inTask) {
+      // 在任务块内：空行或 #### 标题结束当前块
+      if (line.trim() === '' || line.startsWith('####') || line.startsWith('##')) {
+        if (current.length > 0) {
+          knowledges.push(current.join('\n').trim());
+          current = [];
+        }
+        inTask = false;
+        // 标题行作为新段落
+        if (line.startsWith('####') || line.startsWith('##')) {
+          current = [line];
+          inTask = true;
+        }
+      } else {
+        current.push(line);
+      }
+    } else if (line.startsWith('####') || line.startsWith('##')) {
+      // 标题单独成段
+      if (current.length > 0) knowledges.push(current.join('\n').trim());
+      current = [line];
+      inTask = true;
+    }
+  }
+  if (current.length > 0) knowledges.push(current.join('\n').trim());
+
+  // 2. 如果规则切分没分出几条，按段落（空行）切分
+  if (knowledges.length < 2) {
+    knowledges = content.split(/\n\n+/).map(function(p) { return p.trim(); }).filter(Boolean);
+  }
+
+  // 3. 过滤太短的片段（<10字）和太长片段（>5000字）
+  knowledges = knowledges.filter(function(k) {
+    return k.length >= 10 && k.length <= 5000;
+  });
+
+  return knowledges.length > 0 ? knowledges : [(content || '').slice(0, 500)];
+}
+
+// 处理 Markdown 文档（用 AI 生成 QA/Choice 题目）
 async function processMDDoc(note) {
   var content = (note.content || '').slice(0, 16000);
   var prompt = '你是一个知识提取专家。请阅读以下文档，提取出其中的核心知识点。\n';
@@ -306,6 +364,9 @@ async function runAIPipeline(onProgress) {
       var note = batch[i];
       if (onProgress) onProgress(i + 1, batch.length, note.book || note.id.slice(0, 8));
       var srcType = note.source || 'weread';
+      // 知识提取：Markdown 用规则切分（不耗 token），WeChat 用 AI
+      var knowledges = srcType === 'markdown' ? splitMDDocForBrowse(note) : [note.content || ''];
+      // 用 AI 生成 QA/Choice 题目
       var processed = srcType === 'markdown' ? await processMDDoc(note) : await processWeChatNote(note);
 
       // 出处信息
@@ -316,8 +377,8 @@ async function runAIPipeline(onProgress) {
       if (!note.book && note.filePath) sourceParts.push(note.filePath);
       var sourceStr = sourceParts.join(' · ') || '';
 
-      // 浏览模式：所有知识点都存
-      processed.knowledges.forEach(function(k) {
+      // 浏览模式：所有知识点都存（Markdown 用规则拆分，不用 AI）
+      knowledges.forEach(function(k) {
         results.push({
           type: 'knowledge',
           sourceNoteId: note.id,
