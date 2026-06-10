@@ -9,10 +9,12 @@
 <body>
 
   <!-- ========== 模式切换 ========== -->
-  <div class="mode-switch" id="modeSwitch">
-    <button class="mode-btn active" data-mode="browse">📖 浏览</button>
-    <button class="mode-btn" data-mode="qa">🤔 问答</button>
-    <button class="mode-btn" data-mode="choice">📝 选择题</button>
+  <div class="mode-select-wrap">
+    <select id="modeSelect">
+      <option value="browse">📖 浏览</option>
+      <option value="qa">🤔 问答</option>
+      <option value="choice">📝 选择题</option>
+    </select>
   </div>
 
   <!-- ========== 加载状态 ========== -->

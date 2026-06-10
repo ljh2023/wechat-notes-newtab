@@ -376,18 +376,15 @@ function updateNavButtons() {
 
 // ---- Mode Switching ----
 function initModeSwitch() {
-  var buttons = document.querySelectorAll('.mode-btn');
-  buttons.forEach(function(btn) {
-    btn.addEventListener('click', async function() {
-      buttons.forEach(function(b) { b.classList.remove('active'); });
-      btn.classList.add('active');
-      currentMode = btn.dataset.mode;
-      await new Promise(function(r) { chrome.storage.local.set({ [MODE_KEY]: currentMode }, r); });
-      addBrowseLog('mode', '切至 ' + currentMode);
-      shownIds = [];
-      noteHistory = [];
-      loadNextInMode();
-    });
+  var sel = document.getElementById('modeSelect');
+  if (!sel) return;
+  sel.addEventListener('change', function() {
+    currentMode = sel.value;
+    chrome.storage.local.set({ [MODE_KEY]: currentMode });
+    addBrowseLog('mode', '切至 ' + currentMode);
+    shownIds = [];
+    noteHistory = [];
+    loadNextInMode();
   });
 }
 
@@ -546,9 +543,8 @@ async function restoreState() {
     chrome.storage.local.get([MODE_KEY, CACHE_KEY, SOURCE_ENABLED_KEY, SETTINGS_KEY, 'wx_cache_index'], function(result) {
       if (result[MODE_KEY]) {
         currentMode = result[MODE_KEY];
-        document.querySelectorAll('.mode-btn').forEach(function(b) {
-          b.classList.toggle('active', b.dataset.mode === currentMode);
-        });
+        var modeSel = document.getElementById('modeSelect');
+        if (modeSel) modeSel.value = currentMode;
       }
       if (result[CACHE_KEY]) aiCache = result[CACHE_KEY];
       if (result.wx_cache_index !== undefined) cacheIndex = result.wx_cache_index;
