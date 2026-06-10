@@ -604,14 +604,12 @@ function initLogViewer() {
    ============================================ */
 function initCacheSettings() {
   const cacheCount = document.getElementById('cacheCount');
-  const autoProcess = document.getElementById('autoProcess');
   const cacheDec = document.getElementById('cacheDec');
   const cacheInc = document.getElementById('cacheInc');
   if (!cacheCount) return;
 
-  chrome.storage.local.get(['wx_cache_size', 'wx_auto_process'], function(data) {
+  chrome.storage.local.get(['wx_cache_size'], function(data) {
     if (data.wx_cache_size) cacheCount.textContent = data.wx_cache_size;
-    if (data.wx_auto_process !== undefined) autoProcess.checked = data.wx_auto_process;
   });
 
   cacheDec.addEventListener('click', function() {
@@ -626,10 +624,6 @@ function initCacheSettings() {
     if (v > 200) v = 200;
     cacheCount.textContent = v;
     chrome.storage.local.set({ wx_cache_size: v });
-  });
-
-  autoProcess.addEventListener('change', function() {
-    chrome.storage.local.set({ wx_auto_process: autoProcess.checked });
   });
 
   // 生成缓存按钮

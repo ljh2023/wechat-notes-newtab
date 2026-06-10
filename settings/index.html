@@ -100,6 +100,14 @@
         </div>
       </div>
       <p class="source-status" id="sourceIndicator" style="display:none;"></p>
+      <div class="sync-step" style="margin-top:12px;">
+        <span class="step-num">🤖</span>
+        <span>AI 生成时跳过已排除的书籍/文档</span>
+        <label class="toggle" style="margin-left:auto;">
+          <input type="checkbox" id="skipExcludedInAI" checked />
+          <span class="slider"></span>
+        </label>
+      </div>
     </section>
 
     <!-- ===== AI 接口配置 ===== -->
@@ -182,14 +190,6 @@
       <div class="sync-flow">
         <div class="sync-step">
           <span class="step-num">1</span>
-          <span>导入笔记后自动触发 AI 处理</span>
-          <label class="toggle" style="margin-left:auto;">
-            <input type="checkbox" id="autoProcess" checked />
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="sync-step">
-          <span class="step-num">2</span>
           <span>预生成缓存条数</span>
           <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
             <button class="btn btn-small" id="cacheDec" style="padding:2px 10px;">−</button>
@@ -202,14 +202,6 @@
         <button class="btn btn-primary" id="btnGenCache">🤖 生成 AI 缓存</button>
         <button class="btn" id="btnStructExtract">📋 结构化提取</button>
         <button class="btn" id="btnStopCache" style="display:none;">⏹ 停止</button>
-      </div>
-      <div class="sync-step">
-        <span class="step-num">🤖</span>
-        <span>AI 生成时跳过已排除的书籍/文档</span>
-        <label class="toggle" style="margin-left:auto;">
-          <input type="checkbox" id="skipExcludedInAI" checked />
-          <span class="slider"></span>
-        </label>
       </div>
       <div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:13px;color:var(--text-secondary);">
         <span>缓存状态：</span>
