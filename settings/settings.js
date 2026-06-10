@@ -96,14 +96,18 @@ function buildBookList() {
           <span class="book-name">《${escapeHTML(book)}》</span>
           <span class="book-note-count">${bookCounts[book]} 条笔记</span>
         </div>
-        <label class="toggle">
-          <input type="checkbox" class="book-toggle" data-book="${escapeHTML(book)}" ${dispOff ? '' : 'checked'} />
-          <span class="slider"></span>
-        </label>
-        <label class="toggle toggle-ai">
-          <input type="checkbox" class="book-toggle-ai" data-book="${escapeHTML(book)}" ${aiOff ? '' : 'checked'} />
-          <span class="slider"></span>
-        </label>
+        <div class="toggle-col">
+          <label class="toggle">
+            <input type="checkbox" class="book-toggle" data-book="${escapeHTML(book)}" ${dispOff ? '' : 'checked'} />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-col ai">
+          <label class="toggle toggle-ai">
+            <input type="checkbox" class="book-toggle-ai" data-book="${escapeHTML(book)}" ${aiOff ? '' : 'checked'} />
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
     `;
   });
@@ -210,14 +214,18 @@ function buildDocList() {
           <span class="book-name">${escapeHTML(doc.path)}</span>
           <span class="book-note-count">${doc.fileCount} 条笔记</span>
         </div>
-        <label class="toggle">
-          <input type="checkbox" class="doc-toggle" data-doc="${escapeHTML(doc.path)}" ${dispOff ? '' : 'checked'} />
-          <span class="slider"></span>
-        </label>
-        <label class="toggle toggle-ai">
-          <input type="checkbox" class="doc-toggle-ai" data-doc="${escapeHTML(doc.path)}" ${aiOff ? '' : 'checked'} />
-          <span class="slider"></span>
-        </label>
+        <div class="toggle-col">
+          <label class="toggle">
+            <input type="checkbox" class="doc-toggle" data-doc="${escapeHTML(doc.path)}" ${dispOff ? '' : 'checked'} />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="toggle-col ai">
+          <label class="toggle toggle-ai">
+            <input type="checkbox" class="doc-toggle-ai" data-doc="${escapeHTML(doc.path)}" ${aiOff ? '' : 'checked'} />
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
     `;
   });

@@ -257,13 +257,25 @@ body {
 .book-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 4px;
+  gap: 12px;
+  padding: 10px 4px;
   border-bottom: 1px solid var(--border);
 }
-
 .book-item:last-child {
   border-bottom: none;
+}
+.book-item .book-info {
+  flex: 1;
+  min-width: 0;
+}
+.book-item .toggle-col {
+  width: 70px;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.book-item .toggle-col.ai {
+  width: 60px;
 }
 
 .book-info {
