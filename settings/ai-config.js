@@ -477,11 +477,11 @@ async function runStructuredExtraction(onProgress) {
   var mdNotes = notes.filter(function(n) { return n.source === 'markdown'; });
   if (!mdNotes.length) throw new Error('没有 Markdown 笔记可供提取');
 
-  // 按 AI 排除列表过滤
+  // 结构化提取不走 AI，按展示排除列表过滤
   var settings = allData.wx_settings || {};
-  var aiExcludeDocs = new Set(settings.aiExcludeDocs || []);
-  mdNotes = mdNotes.filter(function(n) { return !aiExcludeDocs.has(n.filePath); });
-  if (!mdNotes.length) throw new Error('没有可提取的 Markdown 笔记（可能已被 AI 排除）');
+  var excludeDocsSet = new Set(settings.excludedDocs || []);
+  mdNotes = mdNotes.filter(function(n) { return !excludeDocsSet.has(n.filePath); });
+  if (!mdNotes.length) throw new Error('没有可提取的 Markdown 笔记（可能已被排除）');
 
   // 按来源分组
   var sourceMap = {};

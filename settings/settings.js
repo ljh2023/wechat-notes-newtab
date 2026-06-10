@@ -786,20 +786,44 @@ function initCacheSettings() {
 // 刷新缓存状态显示
 function refreshCacheStatus() {
   var el = document.getElementById('cacheStatus');
+  var detailEl = document.getElementById('cacheDetail');
   if (!el) return;
   chrome.storage.local.get(['wx_ai_cache', 'wx_cache_size'], function(data) {
     var cache = data.wx_ai_cache || [];
-    var size = data.wx_cache_size || 20;
+    var total = cache.length;
+
+    if (total === 0) {
+      el.innerHTML = '暂无缓存';
+      el.style.color = 'var(--text-tertiary)';
+      if (detailEl) detailEl.innerHTML = '';
+      return;
+    }
+
     var knowledgeCount = cache.filter(function(i) { return i.type === 'knowledge'; }).length;
     var qaCount = cache.filter(function(i) { return i.type === 'qa'; }).length;
     var choiceCount = cache.filter(function(i) { return i.type === 'choice'; }).length;
-    var total = cache.length;
-    if (total === 0) {
-      el.textContent = '暂无缓存';
-      el.style.color = 'var(--text-tertiary)';
-    } else {
-      el.innerHTML = total + ' 条（知识点 ' + knowledgeCount + ' · 问答 ' + qaCount + ' · 选择题 ' + choiceCount + '）';
-      el.style.color = 'var(--accent)';
+    el.innerHTML = total + ' 条（知识点 ' + knowledgeCount + ' · 问答 ' + qaCount + ' · 选择题 ' + choiceCount + '）';
+    el.style.color = 'var(--accent)';
+
+    // 按来源细分
+    if (detailEl) {
+      var groups = {};
+      cache.forEach(function(item) {
+        var src = (item.data && item.data.source) || '未知来源';
+        if (!groups[src]) groups[src] = { k: 0, q: 0, c: 0 };
+        if (item.type === 'knowledge') groups[src].k++;
+        else if (item.type === 'qa') groups[src].q++;
+        else if (item.type === 'choice') groups[src].c++;
+      });
+      var lines = Object.keys(groups).sort().map(function(src) {
+        var g = groups[src];
+        var parts = [];
+        if (g.k) parts.push('知识点 ' + g.k);
+        if (g.q) parts.push('问答 ' + g.q);
+        if (g.c) parts.push('选择题 ' + g.c);
+        return '<div style="padding:4px 0;font-size:12px;">📄 ' + src + ' — ' + parts.join(' · ') + '</div>';
+      });
+      detailEl.innerHTML = lines.join('');
     }
   });
 }
