@@ -587,14 +587,7 @@ async function init() {
       return;
     }
 
-    showState('display');
-    const first = pickNext();
-    if (first) {
-      renderNote(first);
-      card.classList.add('card-enter');
-    } else {
-      showState('empty');
-    }
+    loadNextInMode();
 
   } catch (err) {
     console.error('微信书摘: 加载笔记失败', err);
