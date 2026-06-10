@@ -61,11 +61,9 @@ let sourceEnabled = {};
 
 // ---- Show/hide states ----
 function showState(name) {
-  // 先隐藏 QA/Choice/AllOff 状态
-  if (typeof hideAllStates === 'function') hideAllStates();
-  Object.keys(states).forEach(k => {
-    states[k].classList.toggle('active', k === name);
-  });
+  document.querySelectorAll('.state').forEach(function(s) { s.classList.remove('active'); });
+  var el = states[name];
+  if (el) el.classList.add('active');
 }
 
 // ---- Toast ----
@@ -308,9 +306,6 @@ function animateCardTransition(note, direction) {
 
 // ---- 下一条 ----
 function switchToNext() {
-  // 确保隐藏 QA/Choice 状态
-  if (typeof hideAllStates === 'function') hideAllStates();
-
   // 同一文档内还有知识点，先展示下一条
   if (docKnowledgeList.length > 0 && docKIndex < docKnowledgeList.length - 1) {
     docKIndex++;
