@@ -333,7 +333,11 @@ function addBrowseLog(type, detail) {
   });
 }
 
-function loadNextInMode() {
+function loadNextInMode(skipCurrent) {
+  if (skipCurrent && _currentCacheIdx >= 0 && aiCache.length > 0) {
+    cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
+    saveCacheIndex();
+  }
   if (aiCache.length > 0) {
     if (typeof cacheIndex !== 'number') cacheIndex = 0;
     if (cacheIndex >= aiCache.length) cacheIndex = 0;
