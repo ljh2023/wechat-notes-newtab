@@ -51,7 +51,7 @@ function renderQAMode(data, onResult) {
   var nextBtn = document.getElementById('qaNext');
   var prevBtn = document.getElementById('qaPrev');
   if (nextBtn) { nextBtn.onclick = function() { loadNextInMode(true); }; }
-  if (prevBtn) { prevBtn.onclick = function() { loadNextInMode(true); }; }
+  if (prevBtn) { prevBtn.onclick = function() { loadPrevInMode(); }; }
 
   const showBtn = document.getElementById('qaShowAnswer');
   const answerDiv = document.getElementById('qaAnswer');
@@ -97,7 +97,7 @@ function renderChoiceMode(data, onResult) {
   var nextBtn = document.getElementById('choiceNext');
   var prevBtn = document.getElementById('choicePrev');
   if (nextBtn) { nextBtn.onclick = function() { loadNextInMode(true); }; }
-  if (prevBtn) { prevBtn.onclick = function() { loadNextInMode(true); }; }
+  if (prevBtn) { prevBtn.onclick = function() { loadPrevInMode(); }; }
 
   const optionsDiv = document.getElementById('choiceOptions');
   const resultDiv = document.getElementById('choiceResult');

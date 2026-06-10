@@ -422,6 +422,7 @@ a {
   line-height: 1.7;
   color: var(--text-secondary);
   text-align: left;
+  white-space: pre-wrap;
 }
 .qa-feedback {
   margin-top: 12px;

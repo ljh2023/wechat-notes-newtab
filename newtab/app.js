@@ -333,6 +333,42 @@ function addBrowseLog(type, detail) {
   });
 }
 
+function loadPrevInMode() {
+  if (aiCache.length > 0) {
+    if (typeof cacheIndex !== 'number') cacheIndex = 0;
+    // 从当前位置往前找匹配类型的条目
+    var startIdx = (cacheIndex - 1 + aiCache.length) % aiCache.length;
+    for (var tries = 0; tries < aiCache.length; tries++) {
+      var idx = (startIdx - tries + aiCache.length) % aiCache.length;
+      var item = aiCache[idx];
+      // 跳过已关闭数据源的条目
+      var srcKeys = Object.keys(sourceEnabled);
+      if (srcKeys.length > 0) {
+        var enabledSrcs = srcKeys.filter(function(k) { return sourceEnabled[k]; });
+        if (enabledSrcs.length > 0) {
+          var itemSrcType = item.srcType || 'weread';
+          var srcMatch = enabledSrcs.some(function(s) {
+            if (s === 'weread' && itemSrcType === 'weread') return true;
+            if (s.startsWith('md_') && itemSrcType === 'markdown') return true;
+            return false;
+          });
+          if (!srcMatch) continue;
+        }
+      }
+      if ((currentMode === 'qa' && item.type === 'qa') || (currentMode === 'choice' && item.type === 'choice')) {
+        _currentCacheIdx = idx;
+        cacheIndex = idx;
+        saveCacheIndex();
+        if (currentMode === 'qa') renderQAMode(item.data, onAnswerResult);
+        else renderChoiceMode(item.data, onAnswerResult);
+        return;
+      }
+    }
+  }
+  // 没找到就回退到下一条
+  loadNextInMode(true);
+}
+
 function loadNextInMode(skipCurrent) {
   if (skipCurrent && _currentCacheIdx >= 0 && aiCache.length > 0) {
     cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
