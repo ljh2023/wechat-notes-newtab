@@ -464,14 +464,50 @@ function initSourceManagement(data) {
   mdSources.forEach(function(src) {
     const div = document.createElement('div');
     div.className = 'source-item';
-    div.innerHTML = '<span class="source-icon">📁</span><div class="source-info"><div class="source-name">' + escapeHTML(src.name) + '</div><div class="source-meta">' + src.fileCount + ' 个文件 · ' + src.noteCount + ' 条笔记</div></div><label class="toggle" style="margin-left:auto;"><input type="checkbox" class="source-toggle" data-source="md_' + escapeHTML(src.name) + '" checked /><span class="slider"></span></label>';
+    div.innerHTML = '<span class="source-icon">📁</span><div class="source-info"><div class="source-name">' + escapeHTML(src.name) + '</div><div class="source-meta">' + src.fileCount + ' 个文件 · ' + src.noteCount + ' 条笔记</div></div><div style="display:flex;align-items:center;gap:6px;"><button class="btn btn-small" data-delname="' + escapeHTML(src.name) + '" style="color:var(--danger);padding:2px 8px;font-size:11px;border-color:transparent;">🗑️</button><label class="toggle"><input type="checkbox" class="source-toggle" data-source="md_' + escapeHTML(src.name) + '" checked /><span class="slider"></span></label></div>';
     sourceList.appendChild(div);
   });
 
   document.querySelectorAll('.source-toggle').forEach(function(el) {
     el.addEventListener('change', updateSourceIndicator);
   });
+  // 删除来源按钮
+  document.querySelectorAll('[data-delname]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var name = btn.dataset.delname;
+      if (!confirm('确定要删除来源「' + name + '」的全部笔记吗？此操作不可撤销！')) return;
+      deleteSource(name, btn);
+    });
+  });
   updateSourceIndicator();
+}
+
+function deleteSource(name, btn) {
+  var origText = btn.textContent;
+  btn.textContent = '⏳';
+  btn.disabled = true;
+
+  chrome.storage.local.get(['wx_notes', 'wx_md_sources'], function(data) {
+    // 删除该来源的笔记
+    var notes = (data.wx_notes || []).filter(function(n) { return !(n.source === 'markdown' && n.book === name); });
+    // 删除来源记录
+    var sources = (data.wx_md_sources || []).filter(function(s) { return s.name !== name; });
+
+    chrome.storage.local.set({ wx_notes: notes, wx_md_sources: sources }, function() {
+      allNotes = notes;
+      // 从 DOM 移除该行
+      var item = btn.closest('.source-item');
+      if (item) item.remove();
+      // 同步清除该来源的 sourceEnabled 记录
+      chrome.storage.local.get(['wx_source_enabled'], function(d) {
+        var en = d.wx_source_enabled || {};
+        delete en['md_' + name];
+        chrome.storage.local.set({ wx_source_enabled: en });
+      });
+      refreshUI();
+      showToast('✅ 已删除来源「' + name + '」');
+    });
+  });
 }
 
 function updateSourceIndicator() {
