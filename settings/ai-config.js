@@ -417,7 +417,7 @@ async function runAIPipeline(onProgress) {
       if (note.author) sourceParts.push(note.author);
       if (note.chapter) sourceParts.push(note.chapter);
       if (!note.book && note.filePath) sourceParts.push(note.filePath);
-      var sourceStr = sourceParts.join(' · ') || '';
+      var sourceStr = sourceParts.join(' · ') || note.source || '微信读书';
 
       // 浏览模式：所有知识点都存（Markdown 用规则拆分，不用 AI）
       knowledges.forEach(function(k) {

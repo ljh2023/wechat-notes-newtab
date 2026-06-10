@@ -809,7 +809,7 @@ function refreshCacheStatus() {
     if (detailEl) {
       var groups = {};
       cache.forEach(function(item) {
-        var src = (item.data && item.data.source) || '未知来源';
+        var src = (item.data && item.data.source) || '微信读书';
         if (!groups[src]) groups[src] = { k: 0, q: 0, c: 0 };
         if (item.type === 'knowledge') groups[src].k++;
         else if (item.type === 'qa') groups[src].q++;
