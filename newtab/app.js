@@ -439,32 +439,17 @@ function loadPrevInMode() {
 }
 
 function loadNextInMode(skipCurrent) {
+  // 浏览模式永远走原始笔记（不读 AI 缓存）
+  if (currentMode === 'browse') {
+    switchToNext();
+    return;
+  }
+
+  // QA/Choice 模式读 AI 缓存
   if (skipCurrent && _currentCacheIdx >= 0 && aiCache.length > 0) {
     cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
     saveCacheIndex();
   }
-  if (aiCache.length > 0) {
-    if (typeof cacheIndex !== 'number') cacheIndex = 0;
-    if (cacheIndex >= aiCache.length) cacheIndex = 0;
-
-    // 浏览模式优先用 AI 知识点
-    if (currentMode === 'browse') {
-      var startIdx = cacheIndex;
-      for (var tries = 0; tries < aiCache.length; tries++) {
-        var idx = (startIdx + tries) % aiCache.length;
-        if (aiCache[idx].type === 'knowledge') {
-          _currentCacheIdx = idx;
-          displayKnowledgeItem(aiCache[idx].data);
-          return;
-        }
-      }
-      // 没有 knowledge 类型，回退到原始笔记
-      switchToNext();
-      return;
-    }
-  }
-
-  // QA/Choice 模式
   if (aiCache.length > 0) {
     if (typeof cacheIndex !== 'number') cacheIndex = 0;
     if (cacheIndex >= aiCache.length) cacheIndex = 0;
@@ -853,11 +838,7 @@ function showConfirmDialog(message, onConfirm) {
 
 // ---- Next ----
 btnNext.addEventListener('click', () => {
-  if (aiCache.some(function(item) { return item.type === 'knowledge'; })) {
-    loadNextInMode();
-  } else {
-    switchToNext();
-  }
+  switchToNext();
 });
 
 // ---- Prev ----
