@@ -326,19 +326,21 @@ function switchToNext() {
 
   const next = pickNext();
   if (!next) {
-    if (noteHistory.length > 0) {
-      // 没有可用笔记了，退回上一条
-      const prev = noteHistory.pop();
-      if (prev) {
-        currentNote = prev;
-        animateCardTransition(prev, 'prev');
-        return;
+    // 强制显示笔记卡片（即使 filteredNotes 为空）
+    showState('display');
+    if (allNotes.length > 0) {
+      // 有笔记但被过滤了，显示第一条
+      currentNote = allNotes[0];
+      noteContent.textContent = currentNote.content ? (currentNote.content.slice(0, 500) + '……') : '(无内容)';
+      noteContent.classList.add('plain');
+      if (currentNote.book) {
+        noteSource.innerHTML = '<div class="book-name">《' + currentNote.book + '》</div>';
+      } else {
+        noteSource.innerHTML = '';
       }
-    }
-    if (excludeBooks.length > 0 && allNotes.length > 0) {
-      showState('filtered');
     } else {
-      showState('empty');
+      noteContent.textContent = '还没有笔记，请先导入。';
+      noteSource.innerHTML = '';
     }
     currentNote = null;
     return;
@@ -444,8 +446,6 @@ function loadPrevInMode() {
 function loadNextInMode(skipCurrent) {
   // 浏览模式永远走原始笔记（不读 AI 缓存）
   if (currentMode === 'browse') {
-    if (typeof hideAllStates === 'function') hideAllStates();
-    showState('loading');
     switchToNext();
     return;
   }
