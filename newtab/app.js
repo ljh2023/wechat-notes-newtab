@@ -550,6 +550,7 @@ function renderNoteCard(note) {
   var SOURCE_LINE_TOP = 16;
   var BOTTOM_PAD = 44;
   var DPR = 3;
+  var MAX_LINES = 100; // 超出 100 行不渲染，防止 canvas 超限
 
   var maxTextWidth = CARD_W - PAD * 2;
 
@@ -558,7 +559,12 @@ function renderNoteCard(note) {
   var tempCtx = tempCanvas.getContext('2d');
   tempCtx.font = FONT_SIZE + 'px "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif';
 
-  var lines = wrapChineseText(tempCtx, note.content, maxTextWidth);
+  var content = (note.content || '').slice(0, 3000);
+  var lines = wrapChineseText(tempCtx, content, maxTextWidth);
+  if (lines.length > MAX_LINES) {
+    lines = lines.slice(0, MAX_LINES);
+    lines[MAX_LINES - 1] = '……';
+  }
   var textHeight = lines.length * LINE_HEIGHT;
 
   var hasSource = !!(note.book || note.author || note.chapter);
