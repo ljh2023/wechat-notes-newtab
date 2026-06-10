@@ -308,6 +308,9 @@ function animateCardTransition(note, direction) {
 
 // ---- 下一条 ----
 function switchToNext() {
+  // 确保隐藏 QA/Choice 状态
+  if (typeof hideAllStates === 'function') hideAllStates();
+
   // 同一文档内还有知识点，先展示下一条
   if (docKnowledgeList.length > 0 && docKIndex < docKnowledgeList.length - 1) {
     docKIndex++;
@@ -441,6 +444,8 @@ function loadPrevInMode() {
 function loadNextInMode(skipCurrent) {
   // 浏览模式永远走原始笔记（不读 AI 缓存）
   if (currentMode === 'browse') {
+    if (typeof hideAllStates === 'function') hideAllStates();
+    showState('loading');
     switchToNext();
     return;
   }
