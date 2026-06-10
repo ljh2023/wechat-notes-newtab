@@ -699,7 +699,6 @@ function refreshCacheStatus() {
     }
   });
 }
-}
 
 // ---- Start ----
 init();
