@@ -784,8 +784,6 @@ document.addEventListener('keydown', (e) => {
     } else {
       btnPrev.click();
     }
-  } else if (e.key === 'c') {
-    if (currentMode === 'browse') btnCopy.click();
   } else if (e.key === 'd' || e.key === 'Delete') {
     if (currentMode === 'browse') btnDelete.click();
   }

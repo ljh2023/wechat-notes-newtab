@@ -659,6 +659,17 @@ function initCacheSettings() {
       stopBtn.textContent = '⏹ 正在停止...';
     });
 
+    // AI 跳过排除项开关
+    var skipCheck = document.getElementById('skipExcludedInAI');
+    if (skipCheck) {
+      chrome.storage.local.get(['wx_skip_excluded_in_ai'], function(d) {
+        skipCheck.checked = d.wx_skip_excluded_in_ai !== false;
+      });
+      skipCheck.addEventListener('change', function() {
+        chrome.storage.local.set({ wx_skip_excluded_in_ai: skipCheck.checked });
+      });
+    }
+
     // 结构化提取开关
     var structCheck = document.getElementById('structuredExtract');
     if (structCheck) {

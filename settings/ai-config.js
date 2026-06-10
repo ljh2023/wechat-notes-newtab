@@ -346,9 +346,10 @@ async function runAIPipeline(onProgress) {
   _pipelineCancelled = false;
 
   var allData = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_structured_extract'], function(r) { resolve(r); });
+    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_structured_extract', 'wx_skip_excluded_in_ai'], function(r) { resolve(r); });
   });
   var useStructured = allData.wx_structured_extract === true;
+  var skipExcluded = allData.wx_skip_excluded_in_ai !== false;
   var notes = allData.wx_notes || [];
   if (!notes.length) throw new Error('没有笔记可供处理');
 
@@ -359,11 +360,14 @@ async function runAIPipeline(onProgress) {
   var excludeDocs = settings.excludedDocs || [];
   var docSet = new Set(excludeDocs);
 
-  var candidates = notes.filter(function(n) {
-    if (excludeSet.has((n.book || '').toLowerCase().trim())) return false;
-    if (n.source === 'markdown' && docSet.has(n.filePath)) return false;
-    return true;
-  });
+  var candidates = notes;
+  if (skipExcluded) {
+    candidates = notes.filter(function(n) {
+      if (excludeSet.has((n.book || '').toLowerCase().trim())) return false;
+      if (n.source === 'markdown' && docSet.has(n.filePath)) return false;
+      return true;
+    });
+  }
   if (!candidates.length) throw new Error('没有可处理的笔记（可能已被排除）');
 
   // 按数据源开关过滤
