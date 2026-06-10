@@ -47,6 +47,8 @@ let allNotes = [];
 let filteredNotes = [];
 let shownIds = [];
 let noteHistory = [];  // 浏览历史（上一条用）
+let docKnowledgeList = [];  // 当前文档的知识点列表
+let docKIndex = 0;         // 当前在第几个知识点
 let currentNote = null;
 let excludeBooks = [];
 let excludeDocs = [];
@@ -184,19 +186,73 @@ function renderMarkdown(text) {
   return html;
 }
 
+// ---- 提取纯任务文本 ----
+function cleanTaskText(text) {
+  text = text.replace(/^\s*[-*]\s*\[[ x]\]\s*/, '');
+  text = text.replace(/^>\s*\[!.*\].*/gm, '');
+  text = text.replace(/^>\s*/gm, '');
+  text = text.replace(/<[^>]+>/g, '');
+  text = text.replace(/==/g, '');
+  return text.trim();
+}
+
+// ---- 切分文档为知识点 ----
+function splitDocToKnowledge(note) {
+  var lines = (note.content || '').split('\n');
+  var items = [], cur = [];
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].match(/^\s*[-*]\s*\[[ x]\]/)) {
+      if (cur.length) { items.push(cur.join('\n')); cur = []; }
+      cur.push(lines[i]);
+    } else if (!lines[i].match(/^\s*>?\s*\[!.*\]/)) {
+      if (lines[i].trim()) cur.push(lines[i]);
+    }
+  }
+  if (cur.length) items.push(cur.join('\n'));
+  if (!items.length) {
+    items = (note.content || '').split(/\n\n+/).filter(function(p) { return p.trim().length > 10; });
+  }
+  return items.map(cleanTaskText).filter(Boolean);
+}
+
+// ---- 显示知识点的第 N 条 ----
+function showKPoint(idx, total) {
+  var text = docKnowledgeList[idx] || '(无内容)';
+  if (text.length > 500) text = text.slice(0, 500) + '……';
+  noteContent.textContent = text;
+  noteContent.classList.add('plain');
+  var info = '第 ' + (idx + 1) + ' 条 / 共 ' + total + ' 条知识点';
+  if (currentNote && currentNote.book) {
+    noteSource.innerHTML = '<div class="book-name">📖 ' + currentNote.book + '</div><div class="book-meta" style="margin-top:2px;font-size:11px;color:var(--text-tertiary);">' + info + '</div>';
+  } else {
+    noteSource.innerHTML = '<div class="book-meta" style="font-size:11px;color:var(--text-tertiary);">' + info + '</div>';
+  }
+  showState('display');
+}
+
 // ---- Render note ----
 function renderNote(note) {
   currentNote = note;
 
-  // Render content with truncation for long notes
+  // 对 MD 笔记按知识点切分
+  if (note.source === 'markdown') {
+    var items = splitDocToKnowledge(note);
+    if (items.length > 1) {
+      docKnowledgeList = items;
+      docKIndex = 0;
+      showKPoint(0, items.length);
+      return;
+    }
+  }
+
+  // WeChat 笔记（或单条 MD）
+  docKnowledgeList = [];
   var content = note.content || '(无内容)';
-  var truncated = false;
-  if (content.length > 500) {
+  if (note.source !== 'markdown' && content.length > 500) {
     content = content.slice(0, 500) + '……';
-    truncated = true;
   }
   if (note.source === 'markdown') {
-    noteContent.innerHTML = renderMarkdown(content);
+    noteContent.innerHTML = renderMarkdown(cleanTaskText(content));
     noteContent.classList.remove('plain');
   } else {
     noteContent.textContent = content;
@@ -252,6 +308,13 @@ function animateCardTransition(note, direction) {
 
 // ---- 下一条 ----
 function switchToNext() {
+  // 同一文档内还有知识点，先展示下一条
+  if (docKnowledgeList.length > 0 && docKIndex < docKnowledgeList.length - 1) {
+    docKIndex++;
+    showKPoint(docKIndex, docKnowledgeList.length);
+    return;
+  }
+
   // 把当前笔记压入历史栈
   if (currentNote) {
     noteHistory.push(currentNote);
@@ -283,9 +346,15 @@ function switchToNext() {
 
 // ---- 上一条 ----
 function switchToPrev() {
+  // 同一文档内回退到上一条知识点
+  if (docKnowledgeList.length > 0 && docKIndex > 0) {
+    docKIndex--;
+    showKPoint(docKIndex, docKnowledgeList.length);
+    return;
+  }
+
   if (noteHistory.length === 0) return;
 
-  // 当前笔记放回 shownIds 以便以后还能随机到
   if (currentNote) {
     shownIds = shownIds.filter(id => id !== currentNote.id);
   }
