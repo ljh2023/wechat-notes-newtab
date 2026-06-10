@@ -436,8 +436,14 @@ function loadPrevInMode() {
 }
 
 function loadNextInMode(skipCurrent) {
-  // 浏览模式永远走原始笔记（不读 AI 缓存）
+  // 浏览模式：先立即显示 display 状态，再异步切换到笔记内容
   if (currentMode === 'browse') {
+    showState('display');
+    if (currentNote) {
+      noteContent.textContent = currentNote.content ? ('' + currentNote.content).slice(0, 500) + '……' : '(无内容)';
+      noteContent.classList.add('plain');
+      noteSource.innerHTML = currentNote.book ? '<div class="book-name">' + currentNote.book + '</div>' : '';
+    }
     switchToNext();
     return;
   }
