@@ -181,7 +181,7 @@ async function processWeChatNote(note) {
   prompt += '{"summary":"一句话摘要","qa":{"question":"思考题","answer":"答案"},"choice":{"question":"题干","options":["A","B","C","D"],"correct":0}}\n\n';
   prompt += '内容：' + (note.content || '').slice(0, 2000);
 
-  var reply = await callAI(prompt, '你是知识提取助手。只返回JSON。', 500);
+  var reply = await callAI(prompt, '你是知识提取助手。只返回JSON。', 1500);
   var parsed = extractJSON(reply);
   return {
     knowledges: [parsed.summary || note.content.slice(0, 200)],
@@ -353,6 +353,7 @@ async function runAIPipeline(onProgress) {
   // 估算 token（~1.5 tokens/中文字符）
   var totalChars = batch.reduce(function(sum, n) { return sum + (n.content || '').length; }, 0);
   var estTokens = Math.round(totalChars * 1.5);
+  var results = [];
   await addAiLog({ type: 'pipeline', status: 'start', total: batch.length, estTokens: estTokens });
 
   for (var i = 0; i < batch.length; i++) {

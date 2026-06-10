@@ -592,6 +592,9 @@ function initCacheSettings() {
   var stopBtn = document.getElementById('btnStopCache');
   if (genBtn) {
     genBtn.addEventListener('click', async function() {
+      // 重置停止按钮状态
+      stopBtn.disabled = false;
+      stopBtn.textContent = '⏹ 停止';
       genBtn.style.display = 'none';
       stopBtn.style.display = 'inline-flex';
 
@@ -645,6 +648,8 @@ function initCacheSettings() {
       }
       genBtn.style.display = 'inline-flex';
       stopBtn.style.display = 'none';
+      stopBtn.disabled = false;
+      stopBtn.textContent = '⏹ 停止';
       setTimeout(function() { progress.style.display = 'none'; }, 5000);
     });
 
