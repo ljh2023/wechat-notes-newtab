@@ -399,6 +399,9 @@ a {
   margin: 0 auto;
   text-align: center;
 }
+.qa-card .btn {
+  margin: 0 auto;
+}
 .qa-card .actions {
   justify-content: center;
   margin-top: 20px;

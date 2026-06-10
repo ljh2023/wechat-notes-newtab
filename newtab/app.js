@@ -317,11 +317,7 @@ function initModeSwitch() {
       addBrowseLog('mode', '切至 ' + currentMode);
       shownIds = [];
       noteHistory = [];
-      if (currentMode === 'browse') {
-        switchToNext();
-      } else {
-        loadNextInMode();
-      }
+      loadNextInMode();
     });
   });
 }
