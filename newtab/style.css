@@ -37,6 +37,11 @@ html, body {
   overflow: hidden;
 }
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -47,7 +52,7 @@ a {
   display: none;
   flex-direction: column;
   align-items: center;
-  height: 100vh;
+  flex: 1;
   width: 100vw;
   padding: 20px 24px;
   animation: fadeIn 0.4s ease;
@@ -144,8 +149,10 @@ a {
   font-size: 20px;
   line-height: 1.8;
   color: var(--text);
-  white-space: pre-wrap;
   word-break: break-word;
+}
+.card-content.plain {
+  white-space: pre-wrap;
 }
 
 .card-source {
@@ -351,4 +358,199 @@ a {
     padding: 8px 16px;
     font-size: 13px;
   }
+}
+
+/* ---- Mode Switch ---- */
+.mode-switch {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+.mode-btn {
+  padding: 6px 18px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card-bg);
+  font-size: 13px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-secondary);
+}
+.mode-btn.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.mode-btn:hover:not(.active) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Serif font for titles ---- */
+.card .book-name {
+  font-family: "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+}
+
+/* ---- QA/Choice Cards ---- */
+.qa-card {
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+.qa-question {
+  font-size: 20px;
+  line-height: 1.7;
+  margin-bottom: 24px;
+  color: var(--text);
+  padding: 0 16px;
+}
+.qa-answer {
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: #f8faf6;
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  text-align: left;
+}
+.qa-feedback {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.choice-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.choice-opt {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  cursor: pointer;
+  font-size: 15px;
+  font-family: var(--font);
+  text-align: left;
+  transition: all 0.15s ease;
+}
+.choice-opt:hover { border-color: var(--accent); background: #faf9f6; }
+.choice-opt.correct { border-color: var(--accent); background: var(--accent-subtle); color: var(--accent-hover); }
+.choice-opt.wrong { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.choice-opt:disabled { cursor: default; opacity: 0.7; }
+.choice-result {
+  margin-top: 12px;
+  font-size: 14px;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+/* ---- Empty card for disabled sources ---- */
+.empty-card {
+  text-align: center;
+  padding: 40px 20px;
+}
+.empty-icon { font-size: 48px; margin-bottom: 12px; }
+.empty-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+.empty-card p { color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; }
+
+/* ---- Settings FAB ---- */
+.settings-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+.settings-fab:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  transform: scale(1.05);
+  border-color: var(--accent);
+}
+
+/* ---- Markdown rendered content ---- */
+#noteContent h3 { font-size: 17px; font-weight: 700; margin: 16px 0 8px; font-family: var(--font-serif); }
+#noteContent h4 { font-size: 15px; font-weight: 600; margin: 12px 0 6px; }
+#noteContent p { margin-bottom: 8px; line-height: 1.7; }
+#noteContent ul { margin: 6px 0; padding-left: 20px; }
+#noteContent li { margin-bottom: 4px; line-height: 1.6; }
+#noteContent code {
+  background: #e8e3da;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 13px;
+}
+#noteContent pre {
+  background: #f0ede7;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  overflow-x: auto;
+}
+#noteContent pre code {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+#noteContent blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 6px 12px;
+  margin: 8px 0;
+  color: var(--text-secondary);
+  font-style: italic;
+  background: #f8faf6;
+  border-radius: 0 4px 4px 0;
+}
+#noteContent strong { font-weight: 700; }
+#noteContent em { font-style: italic; }
+#noteContent a { color: var(--accent); text-decoration: underline; }
+
+/* ---- Settings FAB ---- */
+.settings-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+.settings-fab:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  transform: scale(1.05);
+  border-color: var(--accent);
+}
+
+/* ---- QA/Choice source ---- */
+.qa-source {
+  margin-top: 16px;
+  padding-top: 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
 }

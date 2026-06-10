@@ -5,6 +5,9 @@
 // ---- Storage helpers ----
 const STORAGE_KEY = 'wx_notes';
 const SETTINGS_KEY = 'wx_settings';
+const MODE_KEY = 'wx_display_mode';
+const CACHE_KEY = 'wx_ai_cache';
+const SOURCE_ENABLED_KEY = 'wx_source_enabled';
 
 async function loadAll() {
   return new Promise((resolve) => {
@@ -46,7 +49,12 @@ let shownIds = [];
 let noteHistory = [];  // 浏览历史（上一条用）
 let currentNote = null;
 let excludeBooks = [];
+let excludeDocs = [];
 let stats = { total: 0, excluded: 0 };
+let currentMode = 'browse';
+let aiCache = [];
+let cacheIndex = 0;
+let sourceEnabled = {};
 
 // ---- Show/hide states ----
 function showState(name) {
@@ -66,11 +74,47 @@ function showToast(msg, duration = 2000) {
 
 // ---- Build filtered list ----
 function updateFiltered() {
-  if (!excludeBooks.length) {
-    filteredNotes = allNotes;
-  } else {
-    const excludeSet = new Set(excludeBooks.map(b => b.toLowerCase().trim()));
-    filteredNotes = allNotes.filter(n => !excludeSet.has((n.book || '').toLowerCase().trim()));
+  var candidates = allNotes;
+  var srcKeys = Object.keys(sourceEnabled);
+
+  // Apply source filter only if we have source data AND at least one source enabled
+  if (srcKeys.length > 0) {
+    var enabledSources = srcKeys.filter(function(k) { return sourceEnabled[k]; });
+    if (enabledSources.length > 0) {
+      candidates = allNotes.filter(function(n) {
+        var src = n.source || 'weread';
+        return enabledSources.some(function(s) {
+          // Match weread notes (no source field) against "weread" key
+          if (s === 'weread' && src === 'weread') return true;
+          // Match markdown notes against "md_<name>" keys
+          if (s.startsWith('md_') && src === 'markdown') return true;
+          return false;
+        });
+      });
+      if (candidates.length === 0 && allNotes.length > 0) {
+        // Notes exist but none match enabled sources — don't show all-off
+        // This happens when sourceEnabled only tracks a subset of actual notes
+        candidates = allNotes;
+      }
+    }
+    // If no sources enabled, don't filter by source — just fall through
+  }
+
+  if (excludeBooks.length) {
+    var excludeSet = new Set(excludeBooks.map(function(b) { return b.toLowerCase().trim(); }));
+    candidates = candidates.filter(function(n) { return !excludeSet.has((n.book || '').toLowerCase().trim()); });
+  }
+
+  if (excludeDocs && excludeDocs.length) {
+    var docSet = new Set(excludeDocs);
+    candidates = candidates.filter(function(n) { return !(n.source === 'markdown' && docSet.has(n.filePath)); });
+  }
+
+  filteredNotes = candidates;
+
+  // Show all-off state only when there are truly no notes after all filtering
+  if (filteredNotes.length === 0 && allNotes.length > 0) {
+    if (typeof showAllOffState === 'function') showAllOffState();
   }
 }
 
@@ -96,11 +140,59 @@ function pickNext() {
   return note;
 }
 
+// ---- Simple Markdown to HTML ----
+function renderMarkdown(text) {
+  if (!text) return '';
+  // Escape HTML first
+  var div = document.createElement('div');
+  div.textContent = text;
+  var html = div.innerHTML;
+
+  // Code blocks (``` ```)
+  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // Blockquotes
+  html = html.replace(/^&gt;\s?(.*)$/gm, '<blockquote>$1</blockquote>');
+  // Headings (##, ###)
+  html = html.replace(/^###\s+(.*)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^##\s+(.*)$/gm, '<h3>$1</h3>');
+  // Unordered lists
+  html = html.replace(/^[-*]\s+(.*)$/gm, '<li>$1</li>');
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  // Paragraphs (double newline)
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = '<p>' + html + '</p>';
+  // Clean up empty paragraphs and nested <p> inside block elements
+  html = html.replace(/<p><\/p>/g, '');
+  html = html.replace(/<p><(ul|ol|blockquote|pre|h[34])>/g, '<$1>');
+  html = html.replace(/<\/(ul|ol|blockquote|pre|h[34])><\/p>/g, '</$1>');
+  // Line breaks within paragraphs
+  html = html.replace(/\n/g, '<br>');
+  // Clean double <br>
+  html = html.replace(/(<br>){2,}/g, '<br><br>');
+
+  return html;
+}
+
 // ---- Render note ----
 function renderNote(note) {
   currentNote = note;
 
-  noteContent.textContent = note.content || '(无内容)';
+  // Render Markdown if from local source, plain text otherwise
+  if (note.source === 'markdown') {
+    noteContent.innerHTML = renderMarkdown(note.content || '(无内容)');
+    noteContent.classList.remove('plain');
+  } else {
+    noteContent.textContent = note.content || '(无内容)';
+    noteContent.classList.add('plain');
+  }
 
   if (note.book) {
     const chapterHTML = note.chapter
@@ -120,16 +212,7 @@ function renderNote(note) {
   if (stats.excluded > 0) {
     info += ' &middot; 已排除 ' + stats.excluded + ' 条';
   }
-  info += ' &middot; <a href="#" id="openSettingsLink">设置</a>';
   footerInfo.innerHTML = info;
-
-  const settingsLink = document.getElementById('openSettingsLink');
-  if (settingsLink) {
-    settingsLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      chrome.runtime.openOptionsPage();
-    });
-  }
 }
 
 function escapeHTML(str) {
@@ -164,6 +247,7 @@ function switchToNext() {
   if (currentNote) {
     noteHistory.push(currentNote);
   }
+  addBrowseLog('browse', '翻页');
 
   const next = pickNext();
   if (!next) {
@@ -212,9 +296,104 @@ function updateNavButtons() {
   }
 }
 
+// ---- Mode Switching ----
+function initModeSwitch() {
+  var buttons = document.querySelectorAll('.mode-btn');
+  buttons.forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      buttons.forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentMode = btn.dataset.mode;
+      await new Promise(function(r) { chrome.storage.local.set({ [MODE_KEY]: currentMode }, r); });
+      addBrowseLog('mode', '切至 ' + currentMode);
+      shownIds = [];
+      noteHistory = [];
+      if (currentMode === 'browse') {
+        switchToNext();
+      } else {
+        loadNextInMode();
+      }
+    });
+  });
+}
+
+function addBrowseLog(type, detail) {
+  var entry = { ts: new Date().toISOString(), type: type, status: 'ok' };
+  if (detail) entry.detail = detail;
+  chrome.storage.local.get(['wx_ai_log'], function(r) {
+    var logs = r.wx_ai_log || [];
+    logs.push(entry);
+    if (logs.length > 500) logs.splice(0, logs.length - 500);
+    chrome.storage.local.set({ wx_ai_log: logs });
+  });
+}
+
+function loadNextInMode() {
+  if (currentMode === 'browse') {
+    switchToNext();
+    return;
+  }
+  if (aiCache.length > 0) {
+    // 循环制：从当前位置往后找匹配类型的条目
+    if (typeof cacheIndex !== 'number') cacheIndex = 0;
+    if (cacheIndex >= aiCache.length) cacheIndex = 0;
+    var startIdx = cacheIndex;
+    for (var tries = 0; tries < aiCache.length; tries++) {
+      var idx = (startIdx + tries) % aiCache.length;
+      var item = aiCache[idx];
+      if ((currentMode === 'qa' && item.type === 'qa') || (currentMode === 'choice' && item.type === 'choice')) {
+        cacheIndex = (idx + 1) % aiCache.length;
+        saveCacheIndex();
+        if (currentMode === 'qa') renderQAMode(item.data);
+        else renderChoiceMode(item.data);
+        return;
+      }
+    }
+    // 没有匹配类型的条目，回退
+  }
+  // 无 AI 缓存时检测配置状态并提示
+  chrome.storage.local.get(['wx_ai_config'], function(r) {
+    var aiOk = r.wx_ai_config && r.wx_ai_config.endpoint && r.wx_ai_config.apiKey && r.wx_ai_config.model;
+    showState('display');
+    if (aiOk) {
+      noteContent.textContent = 'AI 已配置，但缓存为空。请在设置页点击「🤖 生成 AI 缓存」生成题目。';
+    } else {
+      noteContent.textContent = '请先在设置页配置 AI 接口（端点 / API Key / 模型名），生成题目后可在此查看。';
+    }
+    noteSource.innerHTML = '';
+    showToast('⚙️ ' + (aiOk ? '请生成 AI 缓存' : '请先配置 AI 接口'), 3000);
+  });
+}
+
+async function saveCacheIndex() {
+  await new Promise(function(r) { chrome.storage.local.set({ wx_cache_index: cacheIndex }, r); });
+}
+
+async function restoreState() {
+  return new Promise(function(resolve) {
+    chrome.storage.local.get([MODE_KEY, CACHE_KEY, SOURCE_ENABLED_KEY, SETTINGS_KEY, 'wx_cache_index'], function(result) {
+      if (result[MODE_KEY]) {
+        currentMode = result[MODE_KEY];
+        document.querySelectorAll('.mode-btn').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.mode === currentMode);
+        });
+      }
+      if (result[CACHE_KEY]) aiCache = result[CACHE_KEY];
+      if (result.wx_cache_index !== undefined) cacheIndex = result.wx_cache_index;
+      if (result[SOURCE_ENABLED_KEY]) sourceEnabled = result[SOURCE_ENABLED_KEY];
+      if (result[SETTINGS_KEY]) {
+        excludeDocs = result[SETTINGS_KEY].excludedDocs || [];
+      }
+      resolve();
+    });
+  });
+}
+
 // ---- Init ----
 async function init() {
   try {
+    await restoreState();
+    initModeSwitch();
     const data = await loadAll();
     allNotes = data[STORAGE_KEY] || [];
     const settings = data[SETTINGS_KEY] || {};
@@ -509,6 +688,12 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// ---- Settings FAB (bottom-right) ----
+document.getElementById('fabSettings').addEventListener('click', (e) => {
+  e.preventDefault();
+  chrome.runtime.openOptionsPage();
+});
+
 // ---- Settings page link (empty states) ----
 document.getElementById('goToSettings').addEventListener('click', (e) => {
   e.preventDefault();
@@ -533,6 +718,7 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes[SETTINGS_KEY]) {
     const s = changes[SETTINGS_KEY].newValue || {};
     excludeBooks = s.excludedBooks || [];
+    excludeDocs = s.excludedDocs || [];
     updateFiltered();
     stats.excluded = allNotes.length - filteredNotes.length;
   }

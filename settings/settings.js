@@ -11,9 +11,11 @@ const GATEWAY_URL = 'https://i.weread.qq.com/api/agent/gateway';
 
 let allNotes = [];
 let excludeBooks = [];
+let excludeDocs = [];
 
 // ---- DOM refs ----
 const bookList      = document.getElementById('bookList');
+const docList       = document.getElementById('docList');
 const statsTotal    = document.getElementById('statTotal');
 const statsActive   = document.getElementById('statActive');
 const statsExcluded = document.getElementById('statExcluded');
@@ -42,7 +44,7 @@ function showToast(msg, duration = 2500) {
 // ---- Storage ----
 async function loadData() {
   return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY, SETTINGS_KEY, API_KEY_STORAGE], (result) => {
+    chrome.storage.local.get([STORAGE_KEY, SETTINGS_KEY, API_KEY_STORAGE, 'wx_md_sources'], (result) => {
       resolve(result);
     });
   });
@@ -52,7 +54,7 @@ async function saveData() {
   return new Promise((resolve) => {
     chrome.storage.local.set({
       [STORAGE_KEY]: allNotes,
-      [SETTINGS_KEY]: { excludedBooks: excludeBooks },
+      [SETTINGS_KEY]: { excludedBooks: excludeBooks, excludedDocs: excludeDocs },
       [API_KEY_STORAGE]: apiKeyInput ? apiKeyInput.value.trim() : '',
     }, resolve);
   });
@@ -141,11 +143,85 @@ function updateStats() {
   statsActive.textContent  = active;
   statsExcluded.textContent = excluded;
   statsBooks.textContent   = uniqueBooks.size;
+
+  // 导入统计
+  const mdFilesEl = document.getElementById('statMdFiles');
+  const mdNotesEl = document.getElementById('statMdNotes');
+  const reviewCorrectEl = document.getElementById('statReviewCorrect');
+  const reviewTotalEl = document.getElementById('statReviewTotal');
+  if (mdFilesEl || mdNotesEl) {
+    chrome.storage.local.get(['wx_md_sources'], function(data) {
+      const sources = data.wx_md_sources || [];
+      let totalFiles = 0, totalNotes = 0;
+      sources.forEach(function(s) { totalFiles += s.fileCount || 0; totalNotes += s.noteCount || 0; });
+      if (mdFilesEl) mdFilesEl.textContent = totalFiles;
+      if (mdNotesEl) mdNotesEl.textContent = totalNotes;
+    });
+  }
+  if (reviewCorrectEl || reviewTotalEl) {
+    chrome.storage.local.get(['wx_review_stats'], function(data) {
+      const s = data.wx_review_stats || {};
+      if (reviewCorrectEl) reviewCorrectEl.textContent = s.todayCorrect || 0;
+      if (reviewTotalEl) reviewTotalEl.textContent = s.todayTotal || 0;
+    });
+  }
+}
+
+// ---- Build doc list ----
+function buildDocList() {
+  if (!docList) return;
+  // Get Markdown notes with unique file paths
+  const mdNotes = allNotes.filter(n => n.source === 'markdown' && n.filePath);
+  const docMap = {};
+  mdNotes.forEach(n => {
+    const key = n.filePath;
+    if (!docMap[key]) docMap[key] = { path: key, fileCount: 0 };
+    docMap[key].fileCount++;
+  });
+  const docs = Object.values(docMap).sort((a, b) => a.path.localeCompare(b.path));
+
+  if (!docs.length) {
+    docList.innerHTML = '<p class="no-data">暂未导入 Markdown 文档。</p>';
+    return;
+  }
+
+  const excludeSet = new Set(excludeDocs);
+  let html = '';
+  docs.forEach(doc => {
+    const isExcluded = excludeSet.has(doc.path);
+    html += `
+      <div class="book-item">
+        <div class="book-info">
+          <span class="book-name">${escapeHTML(doc.path)}</span>
+          <span class="book-note-count">${doc.fileCount} 条笔记</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" class="doc-toggle" data-doc="${escapeHTML(doc.path)}" ${isExcluded ? '' : 'checked'} />
+          <span class="slider"></span>
+        </label>
+      </div>
+    `;
+  });
+  docList.innerHTML = html;
+
+  document.querySelectorAll('.doc-toggle').forEach(el => {
+    el.addEventListener('change', async (e) => {
+      const doc = e.target.dataset.doc;
+      if (e.target.checked) {
+        excludeDocs = excludeDocs.filter(d => d !== doc);
+      } else {
+        if (!excludeDocs.includes(doc)) excludeDocs.push(doc);
+      }
+      await saveData();
+      updateStats();
+    });
+  });
 }
 
 // ---- Refresh entire UI ----
 function refreshUI() {
   buildBookList();
+  buildDocList();
   updateStats();
 }
 
@@ -156,11 +232,15 @@ async function init() {
     allNotes = data[STORAGE_KEY] || [];
     const settings = data[SETTINGS_KEY] || {};
     excludeBooks = settings.excludedBooks || [];
+    excludeDocs = settings.excludedDocs || [];
     // 恢复已保存的 API Key
     if (data[API_KEY_STORAGE] && apiKeyInput) {
       apiKeyInput.value = data[API_KEY_STORAGE];
     }
     refreshUI();
+    initSourceManagement(data);
+    initLogViewer();
+    initCacheSettings();
   } catch (err) {
     console.error('微信书摘: 加载数据失败', err);
     showToast('❌ 加载数据失败：' + err.message);
@@ -178,6 +258,7 @@ btnClearAll.addEventListener('click', () => {
   if (confirm('确定要清空所有笔记数据吗？此操作不可撤销！')) {
     allNotes = [];
     excludeBooks = [];
+    excludeDocs = [];
     saveData().then(() => {
       refreshUI();
       showToast('✅ 已清空所有数据');
@@ -366,6 +447,212 @@ btnSync.addEventListener('click', syncFromWeRead);
 apiKeyInput.addEventListener('change', async () => {
   await saveApiKey(apiKeyInput.value.trim());
 });
+
+/* ============================================
+   新增：数据源管理
+   ============================================ */
+function initSourceManagement(data) {
+  const mdSources = data['wx_md_sources'] || [];
+  const wereadMeta = document.getElementById('sourceMetaWeread');
+  if (!wereadMeta) return;
+
+  const wereadNotes = allNotes.filter(function(n) { return n.source !== 'markdown'; });
+  const wereadBooks = new Set(wereadNotes.map(function(n) { return n.book; }).filter(Boolean));
+  wereadMeta.textContent = wereadNotes.length + ' 条笔记 · ' + wereadBooks.size + ' 本书';
+
+  const sourceList = document.getElementById('sourceList');
+  mdSources.forEach(function(src) {
+    const div = document.createElement('div');
+    div.className = 'source-item';
+    div.innerHTML = '<span class="source-icon">📁</span><div class="source-info"><div class="source-name">' + escapeHTML(src.name) + '</div><div class="source-meta">' + src.fileCount + ' 个文件 · ' + src.noteCount + ' 条笔记</div></div><label class="toggle" style="margin-left:auto;"><input type="checkbox" class="source-toggle" data-source="md_' + escapeHTML(src.name) + '" checked /><span class="slider"></span></label>';
+    sourceList.appendChild(div);
+  });
+
+  document.querySelectorAll('.source-toggle').forEach(function(el) {
+    el.addEventListener('change', updateSourceIndicator);
+  });
+  updateSourceIndicator();
+}
+
+function updateSourceIndicator() {
+  const el = document.getElementById('sourceIndicator');
+  if (!el) return;
+  const toggles = document.querySelectorAll('.source-toggle');
+  let enabledCount = 0;
+  toggles.forEach(function(t) { if (t.checked) enabledCount++; });
+  if (enabledCount === 0) {
+    el.textContent = '⚠️ 所有数据源均已关闭，新标签页将无内容可展示';
+    el.style.background = 'var(--danger-bg)';
+    el.style.color = 'var(--danger)';
+  } else if (enabledCount === toggles.length) {
+    el.textContent = '🔄 ' + toggles.length + ' 个数据源均已开启，随机从所有笔记中抽取';
+    el.style.background = 'var(--accent-subtle)';
+    el.style.color = 'var(--accent-hover)';
+  } else {
+    el.textContent = '🔄 当前 ' + enabledCount + '/' + toggles.length + ' 个数据源开启';
+    el.style.background = '#faf9f6';
+    el.style.color = 'var(--text-secondary)';
+  }
+  el.classList.add('show');
+
+  const enabled = {};
+  toggles.forEach(function(t) { enabled[t.dataset.source] = t.checked; });
+  chrome.storage.local.set({ wx_source_enabled: enabled });
+}
+
+/* ============================================
+   新增：日志查看器
+   ============================================ */
+function initLogViewer() {
+  const container = document.getElementById('logEntries');
+  const btnClear = document.getElementById('btnClearLogs');
+  const btnCopy = document.getElementById('btnCopyLogs');
+  if (!container || !btnClear) return;
+
+  async function refreshLogs() {
+    const logs = await getAiLogs();
+    if (!logs.length) {
+      container.textContent = '暂无日志';
+      return;
+    }
+    var lines = logs.slice().reverse().slice(0, 200).map(function(log) {
+      var ts = (log.ts || '').slice(0, 19).replace('T', ' ');
+      var status = log.status === 'ok' ? '✓' : '✗';
+      var detail = '';
+      if (log.book) detail += ' [' + log.book + ']';
+      if (log.detail) detail += ' ' + log.detail;
+      if (log.error) detail += ' — ' + log.error;
+      if (log.model) detail += ' [' + log.model + ']';
+      if (log.ms) detail += ' (' + log.ms + 'ms)';
+      if (log.cached) detail += ' → ' + log.cached + ' 条';
+      if (log.estTokens) detail += ' ~' + (log.estTokens / 1000).toFixed(1) + 'K tokens';
+      return ts + ' [' + log.type + '] ' + status + detail;
+    });
+    container.textContent = lines.join('\n');
+    container.scrollTop = 0;
+  }
+
+  document.getElementById('section-logs').addEventListener('toggle', function() {
+    if (this.open) refreshLogs();
+  });
+
+  btnClear.addEventListener('click', async function() {
+    await clearAiLogs();
+    refreshLogs();
+  });
+
+  if (btnCopy) {
+    btnCopy.addEventListener('click', function() {
+      var text = container.textContent;
+      if (!text || text === '暂无日志') { showToast('⚠️ 暂无日志可复制'); return; }
+      navigator.clipboard.writeText(text).then(function() {
+        showToast('✅ 日志已复制到剪贴板');
+      }).catch(function() {
+        showToast('❌ 复制失败');
+      });
+    });
+  }
+}
+
+/* ============================================
+   新增：缓存设置
+   ============================================ */
+function initCacheSettings() {
+  const cacheCount = document.getElementById('cacheCount');
+  const autoProcess = document.getElementById('autoProcess');
+  const cacheDec = document.getElementById('cacheDec');
+  const cacheInc = document.getElementById('cacheInc');
+  if (!cacheCount) return;
+
+  chrome.storage.local.get(['wx_cache_size', 'wx_auto_process'], function(data) {
+    if (data.wx_cache_size) cacheCount.textContent = data.wx_cache_size;
+    if (data.wx_auto_process !== undefined) autoProcess.checked = data.wx_auto_process;
+  });
+
+  cacheDec.addEventListener('click', function() {
+    var v = parseInt(cacheCount.textContent) - 1;
+    if (v < 5) v = 5;
+    cacheCount.textContent = v;
+    chrome.storage.local.set({ wx_cache_size: v });
+  });
+
+  cacheInc.addEventListener('click', function() {
+    var v = parseInt(cacheCount.textContent) + 1;
+    if (v > 200) v = 200;
+    cacheCount.textContent = v;
+    chrome.storage.local.set({ wx_cache_size: v });
+  });
+
+  autoProcess.addEventListener('change', function() {
+    chrome.storage.local.set({ wx_auto_process: autoProcess.checked });
+  });
+
+  // 生成缓存按钮
+  var genBtn = document.getElementById('btnGenCache');
+  var stopBtn = document.getElementById('btnStopCache');
+  if (genBtn) {
+    genBtn.addEventListener('click', async function() {
+      genBtn.style.display = 'none';
+      stopBtn.style.display = 'inline-flex';
+
+      var progress = document.getElementById('genProgress');
+      var fill = document.getElementById('genProgressFill');
+      var text = document.getElementById('genProgressText');
+      progress.style.display = 'block';
+      fill.style.width = '0%';
+      text.textContent = '准备中...';
+
+      try {
+        var result = await window.runAIPipeline(function(current, total, bookName) {
+          var pct = Math.round((current / total) * 100);
+          fill.style.width = pct + '%';
+          text.textContent = '[' + current + '/' + total + '] ' + (bookName || '处理中...');
+        });
+
+        if (result && result.cancelled) {
+          text.textContent = '⏹ 已停止（处理了 ' + result.cached + ' 条）';
+          showToast('⏹ 已停止');
+        } else {
+          fill.style.width = '100%';
+          text.textContent = '✅ 完成！共 ' + result.cached + ' 条缓存';
+          showToast('✅ 缓存生成完成：' + result.cached + ' 条');
+        }
+
+        var logsEl = document.getElementById('logEntries');
+        if (logsEl) {
+          var logs = await getAiLogs();
+          var lines = logs.slice().reverse().slice(0, 200).map(function(log) {
+            var ts = (log.ts || '').slice(0, 19).replace('T', ' ');
+            var status = log.status === 'ok' ? '✓' : '✗';
+            var detail = '';
+            if (log.book) detail += ' [' + log.book + ']';
+            if (log.detail) detail += ' ' + log.detail;
+            if (log.error) detail += ' — ' + log.error;
+            if (log.model) detail += ' [' + log.model + ']';
+            if (log.ms) detail += ' (' + log.ms + 'ms)';
+            if (log.cached) detail += ' → ' + log.cached + ' 条';
+            if (log.estTokens) detail += ' ~' + (log.estTokens / 1000).toFixed(1) + 'K tokens';
+            return ts + ' [' + log.type + '] ' + status + detail;
+          });
+          logsEl.textContent = lines.join('\n');
+        }
+      } catch (e) {
+        fill.style.width = '0%';
+        text.textContent = '❌ 失败：' + e.message;
+        showToast('❌ ' + e.message);
+      }
+      genBtn.style.display = 'inline-flex';
+      stopBtn.style.display = 'none';
+      setTimeout(function() { progress.style.display = 'none'; }, 5000);
+    });
+
+    stopBtn.addEventListener('click', function() {
+      window.cancelAIPipeline();
+      stopBtn.disabled = true;
+      stopBtn.textContent = '⏹ 正在停止...';
+    });
+  }
+}
 
 // ---- Start ----
 init();

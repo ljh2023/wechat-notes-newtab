@@ -14,6 +14,30 @@
       <p class="subtitle">管理你的笔记导入和展示规则</p>
     </header>
 
+    <!-- ===== 统计 ===== -->
+    <section class="section" id="section-stats">
+      <h2 class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        统计概览
+      </h2>
+
+      <p style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">微信读书</p>
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card"><span class="stat-num" id="statTotal">0</span><span class="stat-label">总笔记数</span></div>
+        <div class="stat-card"><span class="stat-num" id="statActive">0</span><span class="stat-label">展示中</span></div>
+        <div class="stat-card"><span class="stat-num" id="statExcluded">0</span><span class="stat-label">已排除</span></div>
+        <div class="stat-card"><span class="stat-num" id="statBooks">0</span><span class="stat-label">涉及书籍</span></div>
+      </div>
+
+      <p style="font-size:13px;font-weight:600;color:var(--text-secondary);margin:12px 0 8px;">导入</p>
+      <div class="stats-grid" id="statsGridImport">
+        <div class="stat-card"><span class="stat-num" id="statMdFiles">0</span><span class="stat-label">Markdown 文件</span></div>
+        <div class="stat-card"><span class="stat-num" id="statMdNotes">0</span><span class="stat-label">导入笔记数</span></div>
+        <div class="stat-card"><span class="stat-num" id="statReviewCorrect">0</span><span class="stat-label">今日答对</span></div>
+        <div class="stat-card"><span class="stat-num" id="statReviewTotal">0</span><span class="stat-label">今日答题</span></div>
+      </div>
+    </section>
+
     <!-- ===== 从微信读书同步 ===== -->
     <section class="section" id="section-sync">
       <h2 class="section-title">
@@ -52,6 +76,73 @@
       <p class="sync-hint">💡 API Key 仅保存在本地浏览器中，不会上传到任何服务器。</p>
     </section>
 
+    <!-- ===== 数据源管理 ===== -->
+    <section class="section" id="section-sources">
+      <h2 class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        数据源管理
+      </h2>
+      <p class="section-desc">管理每个数据源的开关，关闭后该来源的笔记不会出现在新标签页中（数据保留不删除）。</p>
+      <div class="source-list" id="sourceList">
+        <div class="source-item">
+          <span class="source-icon">📖</span>
+          <div class="source-info">
+            <div class="source-name">微信读书</div>
+            <div class="source-meta" id="sourceMetaWeread">0 条笔记 · 0 本书</div>
+          </div>
+          <label class="toggle" style="margin-left:auto;">
+            <input type="checkbox" class="source-toggle" data-source="weread" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+      <p class="source-status" id="sourceIndicator" style="display:none;"></p>
+    </section>
+
+    <!-- ===== AI 接口配置 ===== -->
+    <section class="section" id="section-ai">
+      <h2 class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M2 20c0-4 4.5-7 10-7s10 3 10 7"/></svg>
+        AI 接口配置
+      </h2>
+      <p class="section-desc">配置 AI 服务用于笔记提炼、生成摘要和题目。默认 DeepSeek，兼容 OpenAI 接口。</p>
+      <div class="field-group">
+        <label class="field-label">API 端点</label>
+        <div class="field-row">
+          <input type="text" class="sync-input" id="aiEndpoint" value="https://api.deepseek.com/v1/chat/completions" placeholder="https://api.deepseek.com/v1/chat/completions" />
+          <button class="btn btn-small" id="btnPing">Ping</button>
+        </div>
+        <div class="status-line"><span class="status-dot idle" id="endpointDot"></span><span class="status-text idle" id="endpointText">填入端点后点击 Ping 测试连通性</span></div>
+      </div>
+      <div class="field-group">
+        <label class="field-label">API Key</label>
+        <input type="password" class="sync-input" id="aiApiKey" placeholder="sk-..." />
+      </div>
+      <div class="field-group">
+        <label class="field-label">模型名</label>
+        <input type="text" class="sync-input" id="aiModel" value="deepseek-v4-flash" placeholder="deepseek-chat, gpt-4o-mini" />
+      </div>
+      <button class="btn btn-primary" id="btnTestAi">测试连接</button>
+      <div class="status-line"><span class="status-dot idle" id="testDot"></span><span class="status-text idle" id="testText">填入 API Key 和模型名后测试连接</span></div>
+      <div id="aiTestResult" class="import-result" style="display:none;margin-top:8px;"></div>
+      <p class="sync-hint" style="margin-top:12px;">💡 API Key 仅保存在本地浏览器中。</p>
+    </section>
+
+    <!-- ===== 导入 Markdown 文件夹 ===== -->
+    <section class="section" id="section-md-import">
+      <h2 class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        导入 Markdown 文件夹
+      </h2>
+      <p class="section-desc">导入 Obsidian 等文件夹中的 .md 文件，解析为笔记存入本地。</p>
+      <div class="upload-area" id="folderPicker">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <p>选择 Markdown 文件夹</p>
+        <span style="font-size:12px;color:var(--text-tertiary);">扩展会递归扫描文件夹内所有 .md 文件</span>
+      </div>
+      <div id="mdImportResult" class="import-result" style="display:none;margin-top:8px;"></div>
+    </section>
+
     <!-- ===== 排除书籍 ===== -->
     <section class="section" id="section-exclude">
       <h2 class="section-title">
@@ -65,17 +156,59 @@
       </div>
     </section>
 
-    <!-- ===== 统计 ===== -->
-    <section class="section" id="section-stats">
+    <!-- ===== 排除文档 ===== -->
+    <section class="section" id="section-exclude-docs">
       <h2 class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-        统计概览
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        排除文档
       </h2>
-      <div class="stats-grid" id="statsGrid">
-        <div class="stat-card"><span class="stat-num" id="statTotal">0</span><span class="stat-label">总笔记数</span></div>
-        <div class="stat-card"><span class="stat-num" id="statActive">0</span><span class="stat-label">展示中</span></div>
-        <div class="stat-card"><span class="stat-num" id="statExcluded">0</span><span class="stat-label">已排除</span></div>
-        <div class="stat-card"><span class="stat-num" id="statBooks">0</span><span class="stat-label">涉及书籍</span></div>
+      <p class="section-desc">关闭开关，该文档的笔记将不会出现在新标签页中。</p>
+
+      <div id="docList" class="book-list">
+        <p class="no-data">暂未导入 Markdown 文档。</p>
+      </div>
+    </section>
+
+    <!-- ===== 缓存与预生成 ===== -->
+    <section class="section" id="section-cache">
+      <h2 class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        缓存与预生成
+      </h2>
+      <p class="section-desc">AI 内容预缓存策略，确保新标签页体验流畅。</p>
+      <div class="sync-flow">
+        <div class="sync-step">
+          <span class="step-num">1</span>
+          <span>导入笔记后自动触发 AI 处理</span>
+          <label class="toggle" style="margin-left:auto;">
+            <input type="checkbox" id="autoProcess" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="sync-step">
+          <span class="step-num">2</span>
+          <span>预生成缓存条数</span>
+          <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+            <button class="btn btn-small" id="cacheDec" style="padding:2px 10px;">−</button>
+            <span id="cacheCount" style="font-weight:600;min-width:20px;text-align:center;">20</span>
+            <button class="btn btn-small" id="cacheInc" style="padding:2px 10px;">+</button>
+          </div>
+        </div>
+        <div class="sync-step">
+          <span class="step-num">3</span>
+          <span>缓存剩余 5 条时自动补充</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--accent);">✅ 已开启</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" id="btnGenCache">🤖 生成 AI 缓存</button>
+        <button class="btn" id="btnStopCache" style="display:none;">⏹ 停止</button>
+      </div>
+      <div id="genProgress" class="sync-progress" style="display:none;margin-top:12px;">
+        <div class="sync-progress-bar">
+          <div class="sync-progress-fill" id="genProgressFill"></div>
+        </div>
+        <p class="sync-progress-text" id="genProgressText">准备中...</p>
       </div>
     </section>
 
@@ -89,11 +222,23 @@
       <button class="btn btn-danger-outline" id="btnClearAll">清空所有数据</button>
     </section>
 
+    <!-- ===== 运行日志 ===== -->
+    <details class="section" id="section-logs" style="padding:16px 32px;cursor:pointer;">
+      <summary style="font-size:14px;font-weight:600;color:var(--text-secondary);cursor:pointer;">📋 运行日志</summary>
+      <pre id="logEntries" style="margin-top:12px;max-height:300px;overflow-y:auto;font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;user-select:text;"></pre>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-small" id="btnCopyLogs">📋 复制日志</button>
+        <button class="btn btn-small" id="btnClearLogs">清空日志</button>
+      </div>
+    </details>
+
     <!-- ===== Toast ===== -->
     <div id="toast" class="toast"></div>
 
   </div>
 
   <script src="settings.js"></script>
+  <script src="ai-config.js"></script>
+  <script src="markdown-import.js"></script>
 </body>
 </html>
