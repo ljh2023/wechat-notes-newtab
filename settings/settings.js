@@ -706,14 +706,35 @@ function initCacheSettings() {
       });
     }
 
-    // 结构化提取开关
-    var structCheck = document.getElementById('structuredExtract');
-    if (structCheck) {
-      chrome.storage.local.get(['wx_structured_extract'], function(d) {
-        structCheck.checked = d.wx_structured_extract === true;
-      });
-      structCheck.addEventListener('change', function() {
-        chrome.storage.local.set({ wx_structured_extract: structCheck.checked });
+    // 结构化提取按钮
+    var structBtn = document.getElementById('btnStructExtract');
+    if (structBtn) {
+      structBtn.addEventListener('click', async function() {
+        structBtn.disabled = true;
+        structBtn.textContent = '⏳ 提取中...';
+        var progress = document.getElementById('genProgress');
+        var fill = document.getElementById('genProgressFill');
+        var text = document.getElementById('genProgressText');
+        progress.style.display = 'block';
+        fill.style.width = '0%';
+        text.textContent = '准备中...';
+        try {
+          var result = await window.runStructuredExtraction(function(current, total, name) {
+            var pct = Math.round((current / total) * 100);
+            fill.style.width = pct + '%';
+            text.textContent = '[' + current + '/' + total + '] ' + (name || '');
+          });
+          fill.style.width = '100%';
+          text.textContent = '✅ 提取完成：' + result.cached + ' 条';
+          showToast('✅ 结构化提取完成：' + result.cached + ' 条');
+          refreshCacheStatus();
+        } catch (e) {
+          text.textContent = '❌ ' + e.message;
+          showToast('❌ ' + e.message);
+        }
+        structBtn.disabled = false;
+        structBtn.textContent = '📋 结构化提取';
+        setTimeout(function() { progress.style.display = 'none'; }, 5000);
       });
     }
 

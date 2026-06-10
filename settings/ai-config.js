@@ -346,9 +346,8 @@ async function runAIPipeline(onProgress) {
   _pipelineCancelled = false;
 
   var allData = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_structured_extract', 'wx_skip_excluded_in_ai'], function(r) { resolve(r); });
+    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_skip_excluded_in_ai'], function(r) { resolve(r); });
   });
-  var useStructured = allData.wx_structured_extract === true;
   var skipExcluded = allData.wx_skip_excluded_in_ai !== false;
   var notes = allData.wx_notes || [];
   if (!notes.length) throw new Error('没有笔记可供处理');
@@ -414,29 +413,10 @@ async function runAIPipeline(onProgress) {
       var srcType = note.source || 'weread';
       // 知识提取：Markdown 用规则切分（不耗 token），WeChat 用 AI
       var knowledges = srcType === 'markdown' ? splitMDDocForBrowse(note) : [note.content || ''];
-      // 生成 QA/Choice 题目：结构化提取优先
-      var qaItems = [];
-      var choiceItems = [];
-      if (srcType === 'markdown' && useStructured) {
-        // 结构化提取 QA，选择题仍用 AI
-        qaItems = extractStructuredQA(note);
-        if (qaItems.length > 0) {
-          try {
-            var qPrompt = '根据以下问答对，为每个问题生成一个四选一选择题。\nJSON数组格式：[{"question":"题干","options":["A","B","C","D"],"correct":0}]\n\n';
-            qaItems.forEach(function(q, i) { qPrompt += (i+1) + '. 问：' + q.question + '\n答：' + q.answer + '\n'; });
-            var qReply = await callAI(qPrompt, '只返回JSON数组', 2000);
-            var qParsed = extractJSON(qReply);
-            if (Array.isArray(qParsed)) {
-              choiceItems = qParsed.filter(function(c) { return c.question && c.options; });
-            }
-          } catch (e) { /* 选择题生成失败不阻塞 */ }
-        }
-      } else {
-        // AI 生成
-        var processed = srcType === 'markdown' ? await processMDDoc(note) : await processWeChatNote(note);
-        qaItems = processed.qa || [];
-        choiceItems = processed.choices || [];
-      }
+      // AI 生成 QA/Choice
+      var processed = srcType === 'markdown' ? await processMDDoc(note) : await processWeChatNote(note);
+      var qaItems = processed.qa || [];
+      var choiceItems = processed.choices || [];
 
       // 出处信息
       var sourceParts = [];
@@ -491,6 +471,93 @@ async function runAIPipeline(onProgress) {
 // 手动触发管线的函数（从设置页调用）
 window.runAIPipeline = runAIPipeline;
 window.cancelAIPipeline = function() { _pipelineCancelled = true; };
+
+// ============================================
+// 结构化提取（规则解析，0 token）
+// ============================================
+async function runStructuredExtraction(onProgress) {
+  _pipelineCancelled = false;
+  var allData = await new Promise(function(resolve) {
+    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_skip_excluded_in_ai'], function(r) { resolve(r); });
+  });
+  var notes = allData.wx_notes || [];
+  var mdNotes = notes.filter(function(n) { return n.source === 'markdown'; });
+  if (!mdNotes.length) throw new Error('没有 Markdown 笔记可供提取');
+
+  // 过滤排除项
+  var settings = allData.wx_settings || {};
+  var excludeDocs = settings.excludedDocs || [];
+  var docSet = new Set(excludeDocs);
+  var skipExcluded = allData.wx_skip_excluded_in_ai !== false;
+  if (skipExcluded) {
+    mdNotes = mdNotes.filter(function(n) { return !docSet.has(n.filePath); });
+  }
+  if (!mdNotes.length) throw new Error('没有可提取的 Markdown 笔记');
+
+  // 按来源分组
+  var sourceMap = {};
+  mdNotes.forEach(function(n) {
+    var key = n.book || '未知';
+    if (!sourceMap[key]) sourceMap[key] = [];
+    sourceMap[key].push(n);
+  });
+  var sourceNames = Object.keys(sourceMap);
+
+  var results = [];
+  await addAiLog({ type: 'struct', status: 'start', total: sourceNames.length });
+
+  for (var i = 0; i < sourceNames.length; i++) {
+    if (_pipelineCancelled) {
+      await addAiLog({ type: 'struct', status: 'cancelled', extracted: results.length });
+      return { cached: results.length, cancelled: true };
+    }
+    var name = sourceNames[i];
+    if (onProgress) onProgress(i + 1, sourceNames.length, name);
+
+    try {
+      // 取第一条备注获取出处
+      var firstNote = sourceMap[name][0];
+      var sourceStr = firstNote.filePath || name;
+
+      // 合并该来源的所有笔记内容为一个文档
+      var combined = sourceMap[name].map(function(n) { return n.content || ''; }).join('\n\n');
+      var fakeNote = { content: combined, source: 'markdown', filePath: sourceStr, book: name };
+
+      // 提取知识碎片
+      var knowledges = splitMDDocForBrowse(fakeNote);
+
+      // 提取结构化 QA
+      var qas = extractStructuredQA(fakeNote);
+
+      // 存知识碎片
+      knowledges.forEach(function(k) {
+        results.push({ type: 'knowledge', sourceNoteId: 'struct_' + i, srcType: 'markdown', data: { content: k, source: sourceStr } });
+      });
+      // 存 QA
+      qas.forEach(function(q) {
+        results.push({ type: 'qa', sourceNoteId: 'struct_' + i, srcType: 'markdown', data: { question: q.question, answer: q.answer, source: sourceStr } });
+      });
+
+      await addAiLog({ type: 'struct', status: 'ok', source: name, extracted: knowledges.length + qas.length });
+    } catch (e) {
+      await addAiLog({ type: 'struct', status: 'error', source: name, error: e.message });
+    }
+  }
+
+  // 合并到现有缓存
+  var existing = await new Promise(function(resolve) {
+    chrome.storage.local.get(['wx_ai_cache'], function(r) { resolve(r.wx_ai_cache || []); });
+  });
+  // 只保留 AI 生成的（非 struct_ 开头的）
+  var aiOnly = existing.filter(function(item) { return item.sourceNoteId && !item.sourceNoteId.startsWith('struct_'); });
+  var merged = aiOnly.concat(results);
+  await new Promise(function(resolve) { chrome.storage.local.set({ wx_ai_cache: merged }, resolve); });
+
+  await addAiLog({ type: 'struct', status: 'done', total: sourceNames.length, extracted: results.length, cached: merged.length });
+  return { cached: results.length };
+}
+
+window.runStructuredExtraction = runStructuredExtraction;
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initAiConfig);
