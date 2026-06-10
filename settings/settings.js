@@ -636,10 +636,12 @@ function initCacheSettings() {
           });
           logsEl.textContent = lines.join('\n');
         }
+        refreshCacheStatus();
       } catch (e) {
         fill.style.width = '0%';
         text.textContent = '❌ 失败：' + e.message;
         showToast('❌ ' + e.message);
+        refreshCacheStatus();
       }
       genBtn.style.display = 'inline-flex';
       stopBtn.style.display = 'none';
@@ -651,7 +653,36 @@ function initCacheSettings() {
       stopBtn.disabled = true;
       stopBtn.textContent = '⏹ 正在停止...';
     });
+
+    // 生成/停止后刷新缓存状态
+    refreshCacheStatus();
+    // 监听存储变化自动刷新
+    chrome.storage.onChanged.addListener(function(changes) {
+      if (changes.wx_ai_cache) refreshCacheStatus();
+    });
   }
+}
+
+// 刷新缓存状态显示
+function refreshCacheStatus() {
+  var el = document.getElementById('cacheStatus');
+  if (!el) return;
+  chrome.storage.local.get(['wx_ai_cache', 'wx_cache_size'], function(data) {
+    var cache = data.wx_ai_cache || [];
+    var size = data.wx_cache_size || 20;
+    var knowledgeCount = cache.filter(function(i) { return i.type === 'knowledge'; }).length;
+    var qaCount = cache.filter(function(i) { return i.type === 'qa'; }).length;
+    var choiceCount = cache.filter(function(i) { return i.type === 'choice'; }).length;
+    var total = cache.length;
+    if (total === 0) {
+      el.textContent = '暂无缓存';
+      el.style.color = 'var(--text-tertiary)';
+    } else {
+      el.innerHTML = total + ' 条（知识点 ' + knowledgeCount + ' · 问答 ' + qaCount + ' · 选择题 ' + choiceCount + '）';
+      el.style.color = 'var(--accent)';
+    }
+  });
+}
 }
 
 // ---- Start ----
