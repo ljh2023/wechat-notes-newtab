@@ -418,9 +418,19 @@ async function runAIPipeline(onProgress) {
       var qaItems = [];
       var choiceItems = [];
       if (srcType === 'markdown' && useStructured) {
-        // 结构化提取：直接从 - [ ] 任务列表取 QA
+        // 结构化提取 QA，选择题仍用 AI
         qaItems = extractStructuredQA(note);
-        // 选择题需要 AI 生成（或者跳过）
+        if (qaItems.length > 0) {
+          try {
+            var qPrompt = '根据以下问答对，为每个问题生成一个四选一选择题。\nJSON数组格式：[{"question":"题干","options":["A","B","C","D"],"correct":0}]\n\n';
+            qaItems.forEach(function(q, i) { qPrompt += (i+1) + '. 问：' + q.question + '\n答：' + q.answer + '\n'; });
+            var qReply = await callAI(qPrompt, '只返回JSON数组', 2000);
+            var qParsed = extractJSON(qReply);
+            if (Array.isArray(qParsed)) {
+              choiceItems = qParsed.filter(function(c) { return c.question && c.options; });
+            }
+          } catch (e) { /* 选择题生成失败不阻塞 */ }
+        }
       } else {
         // AI 生成
         var processed = srcType === 'markdown' ? await processMDDoc(note) : await processWeChatNote(note);
