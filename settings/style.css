@@ -590,3 +590,49 @@ body {
   align-items: stretch;
 }
 .field-row .sync-input { flex: 1; }
+
+/* ---- AI Toggle (purple) ---- */
+.toggle-ai input:checked + .slider {
+  background: #7a6b9a;
+}
+
+/* ---- Small toggle for master headers ---- */
+.toggle-sm {
+  width: 32px !important;
+  height: 18px !important;
+}
+.toggle-sm .slider::after {
+  width: 14px !important;
+  height: 14px !important;
+}
+.toggle-sm input:checked + .slider::after {
+  transform: translateX(14px) !important;
+}
+
+/* ---- Exclude header ---- */
+.exclude-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.exclude-h-name {
+  flex: 1;
+  min-width: 0;
+}
+.exclude-h-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 70px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.exclude-h-label.ai {
+  width: 60px;
+}

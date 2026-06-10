@@ -346,28 +346,21 @@ async function runAIPipeline(onProgress) {
   _pipelineCancelled = false;
 
   var allData = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_skip_excluded_in_ai'], function(r) { resolve(r); });
+    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled'], function(r) { resolve(r); });
   });
-  var skipExcluded = allData.wx_skip_excluded_in_ai !== false;
   var notes = allData.wx_notes || [];
   if (!notes.length) throw new Error('没有笔记可供处理');
 
-  // 过滤已排除书籍 + 排除文档
+  // 按 AI 排除列表过滤
   var settings = allData.wx_settings || {};
-  var excludeBooks = settings.excludedBooks || [];
-  var excludeSet = new Set(excludeBooks.map(function(b) { return b.toLowerCase().trim(); }));
-  var excludeDocs = settings.excludedDocs || [];
-  var docSet = new Set(excludeDocs);
-
-  var candidates = notes;
-  if (skipExcluded) {
-    candidates = notes.filter(function(n) {
-      if (excludeSet.has((n.book || '').toLowerCase().trim())) return false;
-      if (n.source === 'markdown' && docSet.has(n.filePath)) return false;
-      return true;
-    });
-  }
-  if (!candidates.length) throw new Error('没有可处理的笔记（可能已被排除）');
+  var aiExcludeBooks = new Set((settings.aiExcludeBooks || []).map(function(b) { return b.toLowerCase().trim(); }));
+  var aiExcludeDocs = new Set(settings.aiExcludeDocs || []);
+  var candidates = notes.filter(function(n) {
+    if (aiExcludeBooks.has((n.book || '').toLowerCase().trim())) return false;
+    if (n.source === 'markdown' && aiExcludeDocs.has(n.filePath)) return false;
+    return true;
+  });
+  if (!candidates.length) throw new Error('没有可处理的笔记（可能已被 AI 排除）');
 
   // 按数据源开关过滤
   var srcEnabled = allData.wx_source_enabled || {};
@@ -478,21 +471,17 @@ window.cancelAIPipeline = function() { _pipelineCancelled = true; };
 async function runStructuredExtraction(onProgress) {
   _pipelineCancelled = false;
   var allData = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled', 'wx_skip_excluded_in_ai'], function(r) { resolve(r); });
+    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled'], function(r) { resolve(r); });
   });
   var notes = allData.wx_notes || [];
   var mdNotes = notes.filter(function(n) { return n.source === 'markdown'; });
   if (!mdNotes.length) throw new Error('没有 Markdown 笔记可供提取');
 
-  // 过滤排除项
+  // 按 AI 排除列表过滤
   var settings = allData.wx_settings || {};
-  var excludeDocs = settings.excludedDocs || [];
-  var docSet = new Set(excludeDocs);
-  var skipExcluded = allData.wx_skip_excluded_in_ai !== false;
-  if (skipExcluded) {
-    mdNotes = mdNotes.filter(function(n) { return !docSet.has(n.filePath); });
-  }
-  if (!mdNotes.length) throw new Error('没有可提取的 Markdown 笔记');
+  var aiExcludeDocs = new Set(settings.aiExcludeDocs || []);
+  mdNotes = mdNotes.filter(function(n) { return !aiExcludeDocs.has(n.filePath); });
+  if (!mdNotes.length) throw new Error('没有可提取的 Markdown 笔记（可能已被 AI 排除）');
 
   // 按来源分组
   var sourceMap = {};

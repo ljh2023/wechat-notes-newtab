@@ -12,6 +12,8 @@ const GATEWAY_URL = 'https://i.weread.qq.com/api/agent/gateway';
 let allNotes = [];
 let excludeBooks = [];
 let excludeDocs = [];
+let aiExcludeBooks = [];
+let aiExcludeDocs = [];
 
 // ---- DOM refs ----
 const bookList      = document.getElementById('bookList');
@@ -54,7 +56,7 @@ async function saveData() {
   return new Promise((resolve) => {
     chrome.storage.local.set({
       [STORAGE_KEY]: allNotes,
-      [SETTINGS_KEY]: { excludedBooks: excludeBooks, excludedDocs: excludeDocs },
+      [SETTINGS_KEY]: { excludedBooks: excludeBooks, excludedDocs: excludeDocs, aiExcludeBooks: aiExcludeBooks, aiExcludeDocs: aiExcludeDocs },
       [API_KEY_STORAGE]: apiKeyInput ? apiKeyInput.value.trim() : '',
     }, resolve);
   });
@@ -68,7 +70,6 @@ async function saveApiKey(key) {
 
 // ---- Build book list ----
 function buildBookList() {
-  // 统计每本书的笔记数量
   const bookCounts = {};
   allNotes.forEach(n => {
     const book = n.book;
@@ -83,10 +84,12 @@ function buildBookList() {
     return;
   }
 
-  const excludeSet = new Set(excludeBooks);
+  const dispExclude = new Set(excludeBooks);
+  const aiExclude = new Set(aiExcludeBooks);
   let html = '';
   books.forEach(book => {
-    const isExcluded = excludeSet.has(book);
+    const dispOff = dispExclude.has(book);
+    const aiOff = aiExclude.has(book);
     html += `
       <div class="book-item">
         <div class="book-info">
@@ -94,7 +97,11 @@ function buildBookList() {
           <span class="book-note-count">${bookCounts[book]} 条笔记</span>
         </div>
         <label class="toggle">
-          <input type="checkbox" class="book-toggle" data-book="${escapeHTML(book)}" ${isExcluded ? '' : 'checked'} />
+          <input type="checkbox" class="book-toggle" data-book="${escapeHTML(book)}" ${dispOff ? '' : 'checked'} />
+          <span class="slider"></span>
+        </label>
+        <label class="toggle toggle-ai">
+          <input type="checkbox" class="book-toggle-ai" data-book="${escapeHTML(book)}" ${aiOff ? '' : 'checked'} />
           <span class="slider"></span>
         </label>
       </div>
@@ -102,22 +109,29 @@ function buildBookList() {
   });
   bookList.innerHTML = html;
 
-  // 绑定 toggle 事件
   document.querySelectorAll('.book-toggle').forEach(el => {
     el.addEventListener('change', async (e) => {
       const book = e.target.dataset.book;
       if (e.target.checked) {
-        // 取消排除
         excludeBooks = excludeBooks.filter(b => b !== book);
       } else {
-        // 排除
-        if (!excludeBooks.includes(book)) {
-          excludeBooks.push(book);
-        }
+        if (!excludeBooks.includes(book)) excludeBooks.push(book);
       }
       await saveData();
       updateStats();
-      showToast(e.target.checked ? `已取消排除《${book}》` : `已排除《${book}》`);
+      showToast(e.target.checked ? '已取消排除《' + book + '》' : '已排除《' + book + '》');
+    });
+  });
+
+  document.querySelectorAll('.book-toggle-ai').forEach(el => {
+    el.addEventListener('change', async (e) => {
+      const book = e.target.dataset.book;
+      if (e.target.checked) {
+        aiExcludeBooks = aiExcludeBooks.filter(b => b !== book);
+      } else {
+        if (!aiExcludeBooks.includes(book)) aiExcludeBooks.push(book);
+      }
+      await saveData();
     });
   });
 }
@@ -170,7 +184,6 @@ function updateStats() {
 // ---- Build doc list ----
 function buildDocList() {
   if (!docList) return;
-  // Get Markdown notes with unique file paths
   const mdNotes = allNotes.filter(n => n.source === 'markdown' && n.filePath);
   const docMap = {};
   mdNotes.forEach(n => {
@@ -185,10 +198,12 @@ function buildDocList() {
     return;
   }
 
-  const excludeSet = new Set(excludeDocs);
+  const dispExclude = new Set(excludeDocs);
+  const aiExclude = new Set(aiExcludeDocs);
   let html = '';
   docs.forEach(doc => {
-    const isExcluded = excludeSet.has(doc.path);
+    const dispOff = dispExclude.has(doc.path);
+    const aiOff = aiExclude.has(doc.path);
     html += `
       <div class="book-item">
         <div class="book-info">
@@ -196,7 +211,11 @@ function buildDocList() {
           <span class="book-note-count">${doc.fileCount} 条笔记</span>
         </div>
         <label class="toggle">
-          <input type="checkbox" class="doc-toggle" data-doc="${escapeHTML(doc.path)}" ${isExcluded ? '' : 'checked'} />
+          <input type="checkbox" class="doc-toggle" data-doc="${escapeHTML(doc.path)}" ${dispOff ? '' : 'checked'} />
+          <span class="slider"></span>
+        </label>
+        <label class="toggle toggle-ai">
+          <input type="checkbox" class="doc-toggle-ai" data-doc="${escapeHTML(doc.path)}" ${aiOff ? '' : 'checked'} />
           <span class="slider"></span>
         </label>
       </div>
@@ -216,6 +235,18 @@ function buildDocList() {
       updateStats();
     });
   });
+
+  document.querySelectorAll('.doc-toggle-ai').forEach(el => {
+    el.addEventListener('change', async (e) => {
+      const doc = e.target.dataset.doc;
+      if (e.target.checked) {
+        aiExcludeDocs = aiExcludeDocs.filter(d => d !== doc);
+      } else {
+        if (!aiExcludeDocs.includes(doc)) aiExcludeDocs.push(doc);
+      }
+      await saveData();
+    });
+  });
 }
 
 // ---- Refresh entire UI ----
@@ -233,6 +264,8 @@ async function init() {
     const settings = data[SETTINGS_KEY] || {};
     excludeBooks = settings.excludedBooks || [];
     excludeDocs = settings.excludedDocs || [];
+    aiExcludeBooks = settings.aiExcludeBooks || [];
+    aiExcludeDocs = settings.aiExcludeDocs || [];
     // 恢复已保存的 API Key
     if (data[API_KEY_STORAGE] && apiKeyInput) {
       apiKeyInput.value = data[API_KEY_STORAGE];
@@ -241,6 +274,7 @@ async function init() {
     initSourceManagement(data);
     initLogViewer();
     initCacheSettings();
+    initMasterToggles();
   } catch (err) {
     console.error('微信书摘: 加载数据失败', err);
     showToast('❌ 加载数据失败：' + err.message);
@@ -259,6 +293,8 @@ btnClearAll.addEventListener('click', () => {
     allNotes = [];
     excludeBooks = [];
     excludeDocs = [];
+    aiExcludeBooks = [];
+    aiExcludeDocs = [];
     saveData().then(() => {
       refreshUI();
       showToast('✅ 已清空所有数据');
@@ -698,17 +734,6 @@ function initCacheSettings() {
       stopBtn.textContent = '⏹ 正在停止...';
     });
 
-    // AI 跳过排除项开关
-    var skipCheck = document.getElementById('skipExcludedInAI');
-    if (skipCheck) {
-      chrome.storage.local.get(['wx_skip_excluded_in_ai'], function(d) {
-        skipCheck.checked = d.wx_skip_excluded_in_ai !== false;
-      });
-      skipCheck.addEventListener('change', function() {
-        chrome.storage.local.set({ wx_skip_excluded_in_ai: skipCheck.checked });
-      });
-    }
-
     // 结构化提取按钮
     var structBtn = document.getElementById('btnStructExtract');
     if (structBtn) {
@@ -768,6 +793,38 @@ function refreshCacheStatus() {
       el.innerHTML = total + ' 条（知识点 ' + knowledgeCount + ' · 问答 ' + qaCount + ' · 选择题 ' + choiceCount + '）';
       el.style.color = 'var(--accent)';
     }
+  });
+}
+
+/* ============================================
+   新增：主开关
+   ============================================ */
+function initMasterToggles() {
+  // AI master toggles
+  ['masterAiBook', 'masterAiDoc'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function() {
+      var checked = el.checked;
+      var selector = id === 'masterAiBook' ? '.book-toggle-ai' : '.doc-toggle-ai';
+      document.querySelectorAll(selector).forEach(function(t) {
+        t.checked = checked;
+        t.dispatchEvent(new Event('change'));
+      });
+    });
+  });
+  // Display master toggles
+  ['masterDisplayBook', 'masterDisplayDoc'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function() {
+      var checked = el.checked;
+      var selector = id === 'masterDisplayBook' ? '.book-toggle' : '.doc-toggle';
+      document.querySelectorAll(selector).forEach(function(t) {
+        t.checked = checked;
+        t.dispatchEvent(new Event('change'));
+      });
+    });
   });
 }
 
