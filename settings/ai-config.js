@@ -260,11 +260,20 @@ async function runAIPipeline(onProgress) {
       var note = batch[i];
       if (onProgress) onProgress(i + 1, batch.length, note.book || note.id.slice(0, 8));
       var processed = await processNote(note);
-      var sourceInfo = note.book || note.filePath || '';
+      // 出处信息
+      var sourceParts = [];
+      if (note.book) sourceParts.push('《' + note.book + '》');
+      if (note.author) sourceParts.push(note.author);
+      if (note.chapter) sourceParts.push(note.chapter);
+      if (!note.book && note.filePath) sourceParts.push(note.filePath);
+      var sourceStr = sourceParts.join(' · ') || '';
+      var srcType = note.source || 'weread'; // 'weread' or 'markdown'
+
       var entry = {
         type: 'summary',
         sourceNoteId: note.id,
-        data: { summary: processed.summary, source: sourceInfo }
+        srcType: srcType,
+        data: { summary: processed.summary, source: sourceStr }
       };
       results.push(entry);
       // Q&A
@@ -272,7 +281,8 @@ async function runAIPipeline(onProgress) {
         results.push({
           type: 'qa',
           sourceNoteId: note.id,
-          data: { question: processed.qa.question, answer: processed.qa.answer, source: sourceInfo }
+          srcType: srcType,
+          data: { question: processed.qa.question, answer: processed.qa.answer, source: sourceStr }
         });
       }
       // Choice
@@ -280,9 +290,10 @@ async function runAIPipeline(onProgress) {
         results.push({
           type: 'choice',
           sourceNoteId: note.id,
+          srcType: srcType,
           data: {
             question: processed.choice.question,
-            source: sourceInfo,
+            source: sourceStr,
             options: processed.choice.options.map(function(opt, idx) {
               return { label: opt, correct: idx === processed.choice.correct };
             })

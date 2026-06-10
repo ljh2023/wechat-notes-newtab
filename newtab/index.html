@@ -75,11 +75,15 @@
   <div id="state-qa" class="state">
     <div class="state-scroll">
       <div class="qa-card">
+        <div class="qa-source" id="qaSource"></div>
         <div class="qa-question" id="qaQuestion"></div>
         <button class="btn" id="qaShowAnswer" style="display:none;">点击展示答案</button>
         <div class="qa-answer" id="qaAnswer" style="display:none;"></div>
         <div class="qa-feedback" id="qaFeedback" style="display:none;"></div>
-        <div class="qa-source" id="qaSource"></div>
+        <div class="actions">
+          <button class="btn" id="qaPrev">上一条</button>
+          <button class="btn btn-primary" id="qaNext">下一条</button>
+        </div>
       </div>
     </div>
   </div>
@@ -88,10 +92,14 @@
   <div id="state-choice" class="state">
     <div class="state-scroll">
       <div class="qa-card">
+        <div class="qa-source" id="choiceSource"></div>
         <div class="qa-question" id="choiceQuestion"></div>
         <div class="choice-options" id="choiceOptions"></div>
         <div class="choice-result" id="choiceResult" style="display:none;"></div>
-        <div class="qa-source" id="choiceSource"></div>
+        <div class="actions">
+          <button class="btn" id="choicePrev">上一条</button>
+          <button class="btn btn-primary" id="choiceNext">下一条</button>
+        </div>
       </div>
     </div>
   </div>

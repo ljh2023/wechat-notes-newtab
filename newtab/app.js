@@ -59,6 +59,8 @@ let sourceEnabled = {};
 
 // ---- Show/hide states ----
 function showState(name) {
+  // 先隐藏 QA/Choice/AllOff 状态
+  if (typeof hideAllStates === 'function') hideAllStates();
   Object.keys(states).forEach(k => {
     states[k].classList.toggle('active', k === name);
   });
@@ -186,12 +188,18 @@ function renderMarkdown(text) {
 function renderNote(note) {
   currentNote = note;
 
-  // Render Markdown if from local source, plain text otherwise
+  // Render content with truncation for long notes
+  var content = note.content || '(无内容)';
+  var truncated = false;
+  if (content.length > 500) {
+    content = content.slice(0, 500) + '……';
+    truncated = true;
+  }
   if (note.source === 'markdown') {
-    noteContent.innerHTML = renderMarkdown(note.content || '(无内容)');
+    noteContent.innerHTML = renderMarkdown(content);
     noteContent.classList.remove('plain');
   } else {
-    noteContent.textContent = note.content || '(无内容)';
+    noteContent.textContent = content;
     noteContent.classList.add('plain');
   }
 
@@ -335,13 +343,26 @@ function loadNextInMode() {
     return;
   }
   if (aiCache.length > 0) {
-    // 从当前位置往后找匹配类型的条目
     if (typeof cacheIndex !== 'number') cacheIndex = 0;
     if (cacheIndex >= aiCache.length) cacheIndex = 0;
     var startIdx = cacheIndex;
     for (var tries = 0; tries < aiCache.length; tries++) {
       var idx = (startIdx + tries) % aiCache.length;
       var item = aiCache[idx];
+      // 跳过已关闭数据源的条目（基于缓存中的 srcType）
+      var srcKeys = Object.keys(sourceEnabled);
+      if (srcKeys.length > 0) {
+        var enabledSrcs = srcKeys.filter(function(k) { return sourceEnabled[k]; });
+        if (enabledSrcs.length > 0) {
+          var itemSrcType = item.srcType || 'weread';
+          var srcMatch = enabledSrcs.some(function(s) {
+            if (s === 'weread' && itemSrcType === 'weread') return true;
+            if (s.startsWith('md_') && itemSrcType === 'markdown') return true;
+            return false;
+          });
+          if (!srcMatch) continue; // 跳过不匹配来源的条目
+        }
+      }
       if ((currentMode === 'qa' && item.type === 'qa') || (currentMode === 'choice' && item.type === 'choice')) {
         _currentCacheIdx = idx;
         if (currentMode === 'qa') renderQAMode(item.data, onAnswerResult);
@@ -692,23 +713,32 @@ btnPrev.addEventListener('click', () => switchToPrev());
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-  switch (e.key) {
-    case 'ArrowRight':
-    case ' ':
-      e.preventDefault();
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'n') {
+    e.preventDefault();
+    if (currentMode === 'qa') {
+      var qaNext = document.getElementById('qaNext');
+      if (qaNext) qaNext.click();
+    } else if (currentMode === 'choice') {
+      var choiceNext = document.getElementById('choiceNext');
+      if (choiceNext) choiceNext.click();
+    } else {
       btnNext.click();
-      break;
-    case 'ArrowLeft':
-      e.preventDefault();
+    }
+  } else if (e.key === 'ArrowLeft' || e.key === 'p') {
+    e.preventDefault();
+    if (currentMode === 'qa') {
+      var qaPrev = document.getElementById('qaPrev');
+      if (qaPrev) qaPrev.click();
+    } else if (currentMode === 'choice') {
+      var choicePrev = document.getElementById('choicePrev');
+      if (choicePrev) choicePrev.click();
+    } else {
       btnPrev.click();
-      break;
-    case 'c':
-      btnCopy.click();
-      break;
-    case 'd':
-    case 'Delete':
-      btnDelete.click();
-      break;
+    }
+  } else if (e.key === 'c') {
+    if (currentMode === 'browse') btnCopy.click();
+  } else if (e.key === 'd' || e.key === 'Delete') {
+    if (currentMode === 'browse') btnDelete.click();
   }
 });
 

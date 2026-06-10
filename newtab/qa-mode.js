@@ -42,8 +42,16 @@ function renderQAMode(data, onResult) {
 
   document.getElementById('qaQuestion').textContent = data.question || '(问题内容不可用)';
 
-  const sourceEl = document.getElementById('qaSource');
-  if (sourceEl) sourceEl.textContent = data.source || '';
+  var sourceEl = document.getElementById('qaSource');
+  if (sourceEl) {
+    sourceEl.innerHTML = data.source ? '📖 ' + data.source : '';
+  }
+
+  // 绑定导航按钮
+  var nextBtn = document.getElementById('qaNext');
+  var prevBtn = document.getElementById('qaPrev');
+  if (nextBtn) { nextBtn.onclick = function() { loadNextInMode(); }; }
+  if (prevBtn) { prevBtn.onclick = function() { loadNextInMode(); }; }
 
   const showBtn = document.getElementById('qaShowAnswer');
   const answerDiv = document.getElementById('qaAnswer');
@@ -80,11 +88,16 @@ function renderChoiceMode(data, onResult) {
 
   document.getElementById('choiceQuestion').textContent = data.question || '(题目内容不可用)';
 
-  // 出处
-  const sourceEl = document.getElementById('choiceSource');
+  var sourceEl = document.getElementById('choiceSource');
   if (sourceEl) {
-    sourceEl.textContent = data.source || '';
+    sourceEl.innerHTML = data.source ? '📖 ' + data.source : '';
   }
+
+  // 绑定导航按钮
+  var nextBtn = document.getElementById('choiceNext');
+  var prevBtn = document.getElementById('choicePrev');
+  if (nextBtn) { nextBtn.onclick = function() { loadNextInMode(); }; }
+  if (prevBtn) { prevBtn.onclick = function() { loadNextInMode(); }; }
 
   const optionsDiv = document.getElementById('choiceOptions');
   const resultDiv = document.getElementById('choiceResult');
