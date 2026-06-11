@@ -64,6 +64,13 @@ let pendingSeenIds = new Set();
 let seenFlushTimer = null;
 let _coverageExpanded = false;
 
+// 重新触发元素的 CSS animation
+function restartAnimation(el) {
+  el.style.animation = 'none';
+  void el.offsetHeight; // force reflow
+  el.style.animation = '';
+}
+
 // ---- Show/hide states ----
 function showState(name) {
   document.querySelectorAll('.state').forEach(function(s) { s.classList.remove('active'); });
@@ -396,9 +403,10 @@ function initModeSwitch() {
   var sel = document.getElementById('modeSelect');
   if (!sel) return;
   sel.addEventListener('change', function() {
+    var oldMode = currentMode;
     currentMode = sel.value;
     chrome.storage.local.set({ [MODE_KEY]: currentMode });
-    addBrowseLog('mode', '切至 ' + currentMode, { prevMode: currentMode });
+    addBrowseLog('mode', '切至 ' + currentMode, { prevMode: oldMode });
     shownIds = [];
     noteHistory = [];
     loadNextInMode();
@@ -660,7 +668,7 @@ async function flushSeenIds() {
   // 新笔记已写入，刷新覆盖度面板
   if (newCount > 0 && typeof updateCoverageDisplay === 'function') {
     addBrowseLog('flushSeen', '刷入 ' + newCount + ' 条新浏览', { totalSeen: progress.seenNoteIds.length });
-    updateCoverageDisplay();
+    await updateCoverageDisplay();
   }
 }
 
@@ -745,7 +753,16 @@ async function updateCoverageDisplay() {
 
   let booksHtml = '';
   if (bookList.length > 0) {
-    booksHtml = buildBookChipsHtml(bookList, qaAccuracy);
+    // qaAccuracy 按 book（文件夹名）存储，而 browse 模式的 bookList 用 getNoteGroupKey（MD 返回文件名）
+    var displayToBook = {};
+    if (currentMode === 'browse') {
+      var srcB = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
+      srcB.forEach(function(n) {
+        var d = getNoteGroupKey(n);
+        if (!displayToBook[d]) displayToBook[d] = n.book || '(未归类)';
+      });
+    }
+    booksHtml = buildBookChipsHtml(bookList, qaAccuracy, displayToBook);
   }
 
   // 增量更新 DOM，保留元素以实现平滑 CSS transition
@@ -786,18 +803,14 @@ async function updateCoverageDisplay() {
         if (next) next.textContent = '/' + total + ' 条';
         if (prevVal !== newVal) {
           labelStrong.setAttribute('data-val', newVal);
-          labelStrong.style.animation = 'none';
-          labelStrong.offsetHeight;
-          labelStrong.style.animation = '';
+          restartAnimation(labelStrong);
         }
       }
       if (pctEl) {
         var newPct = (total > 0 ? pct : '—') + '%';
         if (pctEl.textContent !== newPct) {
           pctEl.textContent = newPct;
-          pctEl.style.animation = 'none';
-          pctEl.offsetHeight;
-          pctEl.style.animation = '';
+          restartAnimation(pctEl);
         }
       }
     }
@@ -810,10 +823,7 @@ async function updateCoverageDisplay() {
         if (prevW !== newW) {
           fillEl.setAttribute('data-pct', newW);
           fillEl.style.width = pct + '%';
-          // 重新触发 barFill 动画也用同样技巧
-          fillEl.style.animation = 'none';
-          fillEl.offsetHeight;
-          fillEl.style.animation = '';
+          restartAnimation(fillEl);
         }
       }
     }
@@ -829,7 +839,6 @@ async function updateCoverageDisplay() {
 }
 
 function selectBook(bookName) {
-  var prevBook = selectedBook;
   selectedBook = bookName === selectedBook ? null : bookName;
   shownIds = [];
   noteHistory = [];
@@ -860,11 +869,14 @@ function updateBookChipHighlight() {
   }
 }
 
-function buildBookChipsHtml(bookList, qaAccuracy) {
+function buildBookChipsHtml(bookList, qaAccuracy, displayToBook) {
+  displayToBook = displayToBook || {};
   // 排序：有 QA 数据的优先，正确率低的优先
   var sorted = bookList.slice().sort(function(a, b) {
-    var accA = qaAccuracy[a] >= 0 ? qaAccuracy[a] : 100;
-    var accB = qaAccuracy[b] >= 0 ? qaAccuracy[b] : 100;
+    var keyA = displayToBook[a] || a;
+    var keyB = displayToBook[b] || b;
+    var accA = qaAccuracy[keyA] >= 0 ? qaAccuracy[keyA] : 100;
+    var accB = qaAccuracy[keyB] >= 0 ? qaAccuracy[keyB] : 100;
     if (accA < 60 && accB >= 60) return -1;
     if (accB < 60 && accA >= 60) return 1;
     return a.localeCompare(b);
@@ -887,7 +899,8 @@ function buildBookChipsHtml(bookList, qaAccuracy) {
   });
 
   visible.forEach(function(name) {
-    var pct = qaAccuracy[name];
+    var bookKey = displayToBook[name] || name;
+    var pct = qaAccuracy[bookKey];
     var hasData = pct >= 0;
     var isWeak = hasData && pct < 60;
     var weakClass = isWeak ? ' weak' : '';
@@ -943,6 +956,13 @@ function showAllBooksPanel() {
     var sourceForBooks = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
     var uniqueBooks = sourceForBooks.map(function(n) { return getNoteGroupKey(n); }).filter(function(v, i, a) { return v && a.indexOf(v) === i; });
 
+    // qaAccuracy 按 book（文件夹名）存储，而 getNoteGroupKey 对 MD 返回文件名 → 建立映射
+    var displayToBook = {};
+    sourceForBooks.forEach(function(n) {
+      var display = getNoteGroupKey(n);
+      if (!displayToBook[display]) displayToBook[display] = n.book || '(未归类)';
+    });
+
     var containerId = currentMode === 'qa' ? 'coverage-qa' : currentMode === 'choice' ? 'coverage-choice' : 'coverage-browse';
     var container = document.getElementById(containerId);
     if (!container) return;
@@ -952,7 +972,9 @@ function showAllBooksPanel() {
 
     var html = '<span class="coverage-book-chip' + (selectedBook === null ? ' active' : '') + '" data-action="random">🎲 随机</span>';
     uniqueBooks.forEach(function(book) {
-      var pct = qaAccuracy[book];
+      // 通过 display→book 映射查找 qaAccuracy，找不到时直接查
+      var bookKey = displayToBook[book] || book;
+      var pct = qaAccuracy[bookKey];
       var hasData = pct >= 0;
       var isWeak = hasData && pct < 60;
       var weakClass = isWeak ? ' weak' : '';

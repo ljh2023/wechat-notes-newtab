@@ -65,10 +65,8 @@ async function saveLearningProgress(progress) {
 
 async function recordAnswer(correct, bookName, mode) {
   mode = mode || getModeForReview();
-  // 选择题模式用 choice，其他模式用 qa
-  if (mode === 'choice') {/* ok */}
-  else if (mode === 'qa') {/* ok */}
-  else mode = 'qa'; // fallback
+  // 只有 qa 和 choice 有答题统计，其它 mode 降级为 qa
+  if (mode !== 'choice' && mode !== 'qa') mode = 'qa';
 
   const stats = await getReviewStats();
   const ms = stats[mode];
