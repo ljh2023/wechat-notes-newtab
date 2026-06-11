@@ -892,7 +892,7 @@ function buildBookChipsHtml(bookList, qaAccuracy) {
     var isWeak = hasData && pct < 60;
     var weakClass = isWeak ? ' weak' : '';
     var activeClass = name === selectedBook ? ' active' : '';
-    var label = hasData ? (isWeak ? pct + '% ⚠️' : pct + '%') : '—';
+    var label = hasData ? (isWeak ? pct + '% ⚠️' : pct + '%') : '<span title="暂无答题记录">—</span>';
     html += '<span class="coverage-book-chip' + weakClass + activeClass + '" data-action="select" data-book="' + escapeHTML(name) + '" title="' + escapeHTML(name) + '">📖 <span class="chip-name">' + escapeHTML(name) + '</span> ' + label + '</span>';
   });
 
@@ -940,7 +940,8 @@ function showAllBooksPanel() {
       }
     });
 
-    var uniqueBooks = filteredNotes.map(function(n) { return n.book; }).filter(Boolean).filter(function(v, i, a) { return a.indexOf(v) === i; });
+    var sourceForBooks = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
+    var uniqueBooks = sourceForBooks.map(function(n) { return n.book; }).filter(Boolean).filter(function(v, i, a) { return a.indexOf(v) === i; });
 
     var containerId = currentMode === 'qa' ? 'coverage-qa' : currentMode === 'choice' ? 'coverage-choice' : 'coverage-browse';
     var container = document.getElementById(containerId);
@@ -956,7 +957,7 @@ function showAllBooksPanel() {
       var isWeak = hasData && pct < 60;
       var weakClass = isWeak ? ' weak' : '';
       var activeClass = book === selectedBook ? ' active' : '';
-      var label = hasData ? (isWeak ? pct + '% ⚠️' : pct + '%') : '—';
+      var label = hasData ? (isWeak ? pct + '% ⚠️' : pct + '%') : '<span title="暂无答题记录">—</span>';
       html += '<span class="coverage-book-chip' + weakClass + activeClass + '" data-action="select" data-book="' + escapeHTML(book) + '" title="' + escapeHTML(book) + '">📖 <span class="chip-name">' + escapeHTML(book) + '</span> ' + label + '</span>';
     });
     html += '<span class="coverage-book-chip all-books active" data-action="collapse">↑ 收起</span>';
