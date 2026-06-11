@@ -483,14 +483,19 @@ async function runStructuredExtraction(onProgress) {
   mdNotes = mdNotes.filter(function(n) { return !excludeDocsSet.has(n.filePath); });
   if (!mdNotes.length) throw new Error('没有可提取的 Markdown 笔记（可能已被排除）');
 
-  // 按来源分组
+  // 按文件路径分组（之前按 book 分组会把同一文件夹下的多文件混在一起）
   var sourceMap = {};
   mdNotes.forEach(function(n) {
-    var key = n.book || '未知';
+    var key = n.filePath || n.book || '未知';
     if (!sourceMap[key]) sourceMap[key] = [];
     sourceMap[key].push(n);
   });
-  var sourceNames = Object.keys(sourceMap);
+  var sourceNames = Object.keys(sourceMap).sort();
+  // 提取简短文件名用于显示
+  function shortName(path) {
+    var parts = path.replace(/\\/g, '/').split('/');
+    return parts[parts.length - 1] || path;
+  }
 
   var results = [];
   await addAiLog({ type: 'struct', status: 'start', total: sourceNames.length });
@@ -501,7 +506,8 @@ async function runStructuredExtraction(onProgress) {
       return { cached: results.length, cancelled: true };
     }
     var name = sourceNames[i];
-    if (onProgress) onProgress(i + 1, sourceNames.length, name);
+    var displayName = shortName(name);
+    if (onProgress) onProgress(i + 1, sourceNames.length, displayName);
 
     try {
       // 取第一条备注获取出处
@@ -510,7 +516,7 @@ async function runStructuredExtraction(onProgress) {
 
       // 合并该来源的所有笔记内容为一个文档
       var combined = sourceMap[name].map(function(n) { return n.content || ''; }).join('\n\n');
-      var fakeNote = { content: combined, source: 'markdown', filePath: sourceStr, book: name };
+      var fakeNote = { content: combined, source: 'markdown', filePath: sourceStr, book: firstNote.book || name };
 
       // 提取知识碎片
       var knowledges = splitMDDocForBrowse(fakeNote);
