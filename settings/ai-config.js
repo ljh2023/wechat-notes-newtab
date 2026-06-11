@@ -393,6 +393,8 @@ async function runAIPipeline(onProgress) {
   var totalChars = batch.reduce(function(sum, n) { return sum + (n.content || '').length; }, 0);
   var estTokens = Math.round(totalChars * 1.5);
   var results = [];
+  var MAX_QA = 50, MAX_CHOICE = 30;
+  var qaCount = 0, choiceCount = 0;
   await addAiLog({ type: 'pipeline', status: 'start', total: batch.length, estTokens: estTokens });
 
   for (var i = 0; i < batch.length; i++) {

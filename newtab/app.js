@@ -513,7 +513,7 @@ function loadNextInMode(skipCurrent) {
   // QA/Choice 模式读 AI 缓存
   if (skipCurrent && _currentCacheIdx >= 0 && aiCache.length > 0) {
     cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
-    saveCacheIndex();
+    saveCacheIndex(); // fire-and-forget: 函数非 async，无法 await
   }
   if (aiCache.length > 0) {
     if (typeof cacheIndex !== 'number') cacheIndex = 0;
@@ -589,12 +589,12 @@ function displayKnowledgeItem(data) {
 }
 
 // 答对→移除，答错→保留轮转
-function onAnswerResult(correct) {
+async function onAnswerResult(correct) {
   if (!aiCache.length) return;
   if (_currentCacheIdx < 0) return;
   if (correct) {
     aiCache.splice(_currentCacheIdx, 1);
-    persistCache();
+    await persistCache();
     cacheIndex = Math.min(_currentCacheIdx, aiCache.length - 1);
     if (cacheIndex < 0) cacheIndex = 0;
     addBrowseLog('cache', '答对移除，剩余 ' + aiCache.length + ' 条');
@@ -605,7 +605,7 @@ function onAnswerResult(correct) {
     cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
     addBrowseLog('cache', '答错保留，下次循环');
   }
-  saveCacheIndex();
+  await saveCacheIndex();
   _currentCacheIdx = -1;
 }
 
@@ -1387,6 +1387,7 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes[SOURCE_ENABLED_KEY]) {
     sourceEnabled = changes[SOURCE_ENABLED_KEY].newValue || {};
     updateFiltered();
+    stats.excluded = allNotes.length - filteredNotes.length;
     updateCoverageDisplay();
   }
 });

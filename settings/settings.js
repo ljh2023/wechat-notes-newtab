@@ -554,8 +554,12 @@ apiKeyInput.addEventListener('change', async () => {
    ============================================ */
 function initSourceManagement(data) {
   const mdSources = data['wx_md_sources'] || [];
+  const sourceEnabled = data['wx_source_enabled'] || {};
   const wereadMeta = document.getElementById('sourceMetaWeread');
   if (!wereadMeta) return;
+  // 恢复微信读书源开关状态
+  var wereadToggle = document.querySelector('.source-toggle[data-source="weread"]');
+  if (wereadToggle) wereadToggle.checked = sourceEnabled['weread'] !== false;
 
   const wereadNotes = allNotes.filter(function(n) { return n.source !== 'markdown'; });
   const wereadBooks = new Set(wereadNotes.map(function(n) { return n.book; }).filter(Boolean));
@@ -565,7 +569,9 @@ function initSourceManagement(data) {
   mdSources.forEach(function(src) {
     const div = document.createElement('div');
     div.className = 'source-item';
-    div.innerHTML = '<span class="source-icon">📁</span><div class="source-info"><div class="source-name">' + escapeHTML(src.name) + '</div><div class="source-meta">' + src.fileCount + ' 个文件 · ' + src.noteCount + ' 条笔记</div></div><div style="display:flex;align-items:center;gap:6px;"><button class="btn btn-small" data-delname="' + escapeHTML(src.name) + '" style="color:var(--danger);padding:2px 8px;font-size:11px;border-color:transparent;">🗑️</button><label class="toggle"><input type="checkbox" class="source-toggle" data-source="md_' + escapeHTML(src.name) + '" checked /><span class="slider"></span></label></div>';
+    var mdKey = 'md_' + src.name;
+    var mdEnabled = sourceEnabled[mdKey] !== false;
+    div.innerHTML = '<span class="source-icon">📁</span><div class="source-info"><div class="source-name">' + escapeHTML(src.name) + '</div><div class="source-meta">' + src.fileCount + ' 个文件 · ' + src.noteCount + ' 条笔记</div></div><div style="display:flex;align-items:center;gap:6px;"><button class="btn btn-small" data-delname="' + escapeHTML(src.name) + '" style="color:var(--danger);padding:2px 8px;font-size:11px;border-color:transparent;">🗑️</button><label class="toggle"><input type="checkbox" class="source-toggle" data-source="' + mdKey + '" ' + (mdEnabled ? 'checked' : '') + ' /><span class="slider"></span></label></div>';
     sourceList.appendChild(div);
   });
 
