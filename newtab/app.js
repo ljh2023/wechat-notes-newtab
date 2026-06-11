@@ -593,7 +593,7 @@ function markNoteAsSeen(noteId) {
   if (!noteId) return;
   pendingSeenIds.add(noteId);
   if (!seenFlushTimer) {
-    seenFlushTimer = setTimeout(flushSeenIds, 2000);
+    seenFlushTimer = setTimeout(flushSeenIds, 0);
   }
 }
 
