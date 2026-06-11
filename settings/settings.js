@@ -338,7 +338,6 @@ async function init() {
     }
     refreshUI();
     initSourceManagement(data);
-    initLogViewer();
     initCacheSettings();
     initMasterToggles();
   } catch (err) {
@@ -650,56 +649,7 @@ function updateSourceIndicator() {
 /* ============================================
    新增：日志查看器
    ============================================ */
-function initLogViewer() {
-  const container = document.getElementById('logEntries');
-  const btnClear = document.getElementById('btnClearLogs');
-  const btnCopy = document.getElementById('btnCopyLogs');
-  if (!container || !btnClear) return;
-
-  async function refreshLogs() {
-    const logs = await getAiLogs();
-    if (!logs.length) {
-      container.textContent = '暂无日志';
-      return;
-    }
-    var lines = logs.slice().reverse().slice(0, 200).map(function(log) {
-      var ts = (log.ts || '').slice(0, 19).replace('T', ' ');
-      var status = log.status === 'ok' ? '✓' : '✗';
-      var detail = '';
-      if (log.book) detail += ' [' + log.book + ']';
-      if (log.detail) detail += ' ' + log.detail;
-      if (log.error) detail += ' — ' + log.error;
-      if (log.model) detail += ' [' + log.model + ']';
-      if (log.ms) detail += ' (' + log.ms + 'ms)';
-      if (log.cached) detail += ' → ' + log.cached + ' 条';
-      if (log.estTokens) detail += ' ~' + (log.estTokens / 1000).toFixed(1) + 'K tokens';
-      return ts + ' [' + log.type + '] ' + status + detail;
-    });
-    container.textContent = lines.join('\n');
-    container.scrollTop = 0;
-  }
-
-  document.getElementById('section-logs').addEventListener('toggle', function() {
-    if (this.open) refreshLogs();
-  });
-
-  btnClear.addEventListener('click', async function() {
-    await clearAiLogs();
-    refreshLogs();
-  });
-
-  if (btnCopy) {
-    btnCopy.addEventListener('click', function() {
-      var text = container.textContent;
-      if (!text || text === '暂无日志') { showToast('⚠️ 暂无日志可复制'); return; }
-      navigator.clipboard.writeText(text).then(function() {
-        showToast('✅ 日志已复制到剪贴板');
-      }).catch(function() {
-        showToast('❌ 复制失败');
-      });
-    });
-  }
-}
+// 日志查看器已移除 —— 需查看日志时直接叫 Claude 用 CDP 读取
 
 /* ============================================
    新增：缓存设置
@@ -762,24 +712,6 @@ function initCacheSettings() {
           showToast('✅ 缓存生成完成：' + result.cached + ' 条');
         }
 
-        var logsEl = document.getElementById('logEntries');
-        if (logsEl) {
-          var logs = await getAiLogs();
-          var lines = logs.slice().reverse().slice(0, 200).map(function(log) {
-            var ts = (log.ts || '').slice(0, 19).replace('T', ' ');
-            var status = log.status === 'ok' ? '✓' : '✗';
-            var detail = '';
-            if (log.book) detail += ' [' + log.book + ']';
-            if (log.detail) detail += ' ' + log.detail;
-            if (log.error) detail += ' — ' + log.error;
-            if (log.model) detail += ' [' + log.model + ']';
-            if (log.ms) detail += ' (' + log.ms + 'ms)';
-            if (log.cached) detail += ' → ' + log.cached + ' 条';
-            if (log.estTokens) detail += ' ~' + (log.estTokens / 1000).toFixed(1) + 'K tokens';
-            return ts + ' [' + log.type + '] ' + status + detail;
-          });
-          logsEl.textContent = lines.join('\n');
-        }
         refreshCacheStatus();
       } catch (e) {
         fill.style.width = '0%';

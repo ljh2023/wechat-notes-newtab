@@ -337,6 +337,7 @@ function switchToNext() {
 
   const next = pickNext();
   if (!next) {
+    addBrowseLog('browse', '翻页无下一节点', { filteredCount: filteredNotes.length, allCount: allNotes.length });
     // 强制显示笔记卡片（即使 filteredNotes 为空）
     showState('display');
     if (allNotes.length > 0) {
@@ -397,20 +398,55 @@ function initModeSwitch() {
   sel.addEventListener('change', function() {
     currentMode = sel.value;
     chrome.storage.local.set({ [MODE_KEY]: currentMode });
-    addBrowseLog('mode', '切至 ' + currentMode);
+    addBrowseLog('mode', '切至 ' + currentMode, { prevMode: currentMode });
     shownIds = [];
     noteHistory = [];
     loadNextInMode();
   });
 }
 
-function addBrowseLog(type, detail) {
-  var entry = { ts: new Date().toISOString(), type: type, status: 'ok' };
+// 当前日志序号，用于关联操作链
+var _logSeq = 0;
+function addBrowseLog(type, detail, extra) {
+  // 取当前状态快照
+  var snapshot = {
+    mode: currentMode,
+    selectedBook: selectedBook,
+    totalNotes: allNotes.length,
+    filteredCount: filteredNotes.length,
+    shownIdsCount: shownIds.length,
+    historyLen: noteHistory.length,
+    cacheLen: aiCache.length,
+    cacheIdx: cacheIndex,
+    currentCacheIdx: _currentCacheIdx,
+    pendingSeen: pendingSeenIds.size,
+    excludeBooks: excludeBooks.length,
+    excludeDocs: excludeDocs.length
+  };
+  if (currentNote) {
+    snapshot.noteId = currentNote.id && currentNote.id.slice(0, 20);
+    snapshot.noteBook = currentNote.book;
+    snapshot.noteSrc = currentNote.source;
+  }
+  var entry = {
+    seq: ++_logSeq,
+    ts: new Date().toISOString(),
+    type: type,
+    status: 'ok',
+    snapshot: snapshot
+  };
   if (detail) entry.detail = detail;
+  if (extra) Object.assign(entry, extra);
+
+  // 同时输出到控制台，CDP 可直接抓取
+  var logLine = '[' + entry.ts.slice(11, 23) + '][' + type + '] ' + (detail || '');
+  if (extra && extra.error) logLine += ' ERROR:' + extra.error;
+  console.log(logLine);
+
   chrome.storage.local.get(['wx_ai_log'], function(r) {
     var logs = r.wx_ai_log || [];
     logs.push(entry);
-    if (logs.length > 500) logs.splice(0, logs.length - 500);
+    if (logs.length > 1000) logs.splice(0, logs.length - 1000);
     chrome.storage.local.set({ wx_ai_log: logs });
   });
 }
@@ -623,6 +659,7 @@ async function flushSeenIds() {
   }
   // 新笔记已写入，刷新覆盖度面板
   if (newCount > 0 && typeof updateCoverageDisplay === 'function') {
+    addBrowseLog('flushSeen', '刷入 ' + newCount + ' 条新浏览', { totalSeen: progress.seenNoteIds.length });
     updateCoverageDisplay();
   }
 }
@@ -792,10 +829,12 @@ async function updateCoverageDisplay() {
 }
 
 function selectBook(bookName) {
+  var prevBook = selectedBook;
   selectedBook = bookName === selectedBook ? null : bookName;
   shownIds = [];
   noteHistory = [];
   updateFiltered();
+  addBrowseLog('selectBook', selectedBook ? '选中「' + selectedBook + '」' : '取消筛选', { prevBook: prevBook });
   if (currentMode === 'browse') {
     switchToNext();
   } else {
@@ -939,6 +978,7 @@ async function initCoveragePanel() {
 
 // ---- Init ----
 async function init() {
+  addBrowseLog('init', '启动', { allNotesCount: allNotes.length, mode: currentMode });
   try {
     await restoreState();
     initModeSwitch();
@@ -953,13 +993,16 @@ async function init() {
     stats.excluded = allNotes.length - filteredNotes.length;
 
     initCoveragePanel();
+    addBrowseLog('init', '数据就绪', { allNotes: allNotes.length, filtered: filteredNotes.length, excluded: stats.excluded, mode: currentMode });
 
     if (!allNotes.length) {
+      addBrowseLog('init', '无笔记，显示空状态');
       showState('empty');
       return;
     }
 
     if (!filteredNotes.length) {
+      addBrowseLog('init', '全部被过滤，显示过滤状态');
       showState('filtered');
       return;
     }
@@ -968,6 +1011,7 @@ async function init() {
 
   } catch (err) {
     console.error('微信书摘: 加载笔记失败', err);
+    addBrowseLog('init', '启动失败', { error: err.message, stack: (err.stack || '').slice(0, 200) });
     showState('empty');
     document.querySelector('#state-empty .empty-desc').textContent =
       '加载笔记时出错：' + err.message;
@@ -1170,12 +1214,14 @@ btnDelete.addEventListener('click', () => {
   showConfirmDialog('确定要删除这条笔记吗？删除后不可恢复。', async () => {
     const idx = allNotes.findIndex(n => n.id === currentNote.id);
     if (idx !== -1) {
+      var deletedNote = currentNote;
       allNotes.splice(idx, 1);
       await saveNotes(allNotes);
       stats.total = allNotes.length;
       updateFiltered();
       stats.excluded = allNotes.length - filteredNotes.length;
       shownIds = shownIds.filter(id => id !== currentNote.id);
+      addBrowseLog('delete', '删除笔记', { id: deletedNote.id.slice(0,20), book: deletedNote.book, remaining: allNotes.length });
       showToast('🗑️ 已删除');
       switchToNext();
     }
