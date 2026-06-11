@@ -577,10 +577,22 @@ a {
   font-size: 10px;
   color: #8b8579;
 }
+.coverage-label strong {
+  display: inline-block;
+  animation: numPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
 .coverage-pct {
   font-size: 10px;
   font-weight: 600;
   color: #5a7a5a;
+  display: inline-block;
+  animation: numPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes numPop {
+  0% { transform: scale(0.5); opacity: 0.4; }
+  40% { transform: scale(1.25); opacity: 1; }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); opacity: 1; }
 }
 .coverage-bar-bg {
   height: 4px;
@@ -593,7 +605,25 @@ a {
   height: 100%;
   background: linear-gradient(90deg, #5a7a5a, #8ab88a);
   border-radius: 2px;
-  transition: width 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  animation: barFill 0.4s ease-out both;
+  transform-origin: left center;
+}
+.coverage-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%);
+  animation: barShine 0.6s ease-out 0.15s both;
+}
+@keyframes barFill {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+@keyframes barShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 .coverage-books {
   display: flex;

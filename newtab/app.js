@@ -605,23 +605,33 @@ async function flushSeenIds() {
   const result = await new Promise(resolve => chrome.storage.local.get('wx_learning_progress', resolve));
   const progress = result.wx_learning_progress || {};
   if (!progress.seenNoteIds) progress.seenNoteIds = [];
+  let newCount = 0;
   ids.forEach(function(id) {
     if (progress.seenNoteIds.indexOf(id) === -1) {
       progress.seenNoteIds.push(id);
+      newCount++;
     }
   });
   await new Promise(resolve => chrome.storage.local.set({ wx_learning_progress: progress }, resolve));
+  // 同步记录浏览模式的今日已阅数
+  if (newCount > 0 && typeof recordBrowseSeen === 'function') {
+    await recordBrowseSeen(newCount);
+  }
+  // 新笔记已写入，刷新覆盖度面板
+  if (newCount > 0 && typeof updateCoverageDisplay === 'function') {
+    updateCoverageDisplay();
+  }
 }
 
 // ---- 覆盖度面板 ----
 async function updateCoverageDisplay() {
   const result = await new Promise(resolve => chrome.storage.local.get(['wx_learning_progress', 'wx_review_stats'], resolve));
   const progress = result.wx_learning_progress || {};
-  const stats = result.wx_review_stats || {};
-  const metaParts = [];
-  if (stats.todayTotal > 0) metaParts.push('今日 ' + stats.todayCorrect + '/' + stats.todayTotal);
-  if (stats.streakDays > 0) metaParts.push('🔥 ' + stats.streakDays + ' 天');
-  const metaText = metaParts.join(' · ');
+  const allStats = result.wx_review_stats || {};
+  // 确保各模式统计存在
+  if (!allStats.qa) allStats.qa = { todayDate: '', todayCorrect: 0, todayTotal: 0, streakDays: 0, masteryPercent: 0 };
+  if (!allStats.choice) allStats.choice = { todayDate: '', todayCorrect: 0, todayTotal: 0, streakDays: 0, masteryPercent: 0 };
+  if (!allStats.browse) allStats.browse = { todayDate: '', todaySeen: 0, streakDays: 0 };
 
   // 选择当前活跃模式的容器
   const isQaMode = currentMode === 'qa' || currentMode === 'choice';
@@ -630,8 +640,9 @@ async function updateCoverageDisplay() {
   if (!container) return;
 
   var bookList, seenCount, total, qaAccuracy;
+  var modeStats = currentMode === 'choice' ? allStats.choice : (currentMode === 'browse' ? allStats.browse : allStats.qa);
 
-  if (isQaMode) {
+  if (currentMode === 'qa' || currentMode === 'choice') {
     // QA/选择题模式：基于缓存
     qaAccuracy = {};
     Object.keys(progress).forEach(function(key) {
@@ -679,24 +690,95 @@ async function updateCoverageDisplay() {
 
   const pct = total > 0 ? Math.round((seenCount / total) * 100) : 0;
 
+  // 按模式显示今日统计
+  var metaParts = [];
+  if (currentMode === 'browse') {
+    if (modeStats.todaySeen > 0) metaParts.push('今日浏览 ' + modeStats.todaySeen + ' 条');
+  } else {
+    if (modeStats.todayTotal > 0) metaParts.push('今日 ' + modeStats.todayCorrect + '/' + modeStats.todayTotal);
+  }
+  if (modeStats.streakDays > 0) metaParts.push('🔥 ' + modeStats.streakDays + ' 天');
+  const metaText = metaParts.join(' · ');
+
   let booksHtml = '';
   if (bookList.length > 0) {
     booksHtml = buildBookChipsHtml(bookList, qaAccuracy);
   }
 
-  container.innerHTML =
-    '<div class="coverage-header">' +
-      '<span class="coverage-title">📊 复习覆盖度</span>' +
-      '<span class="coverage-meta">' + metaText + '</span>' +
-    '</div>' +
-    '<div class="coverage-progress-wrap">' +
-      '<span class="coverage-label">已接触 <strong>' + seenCount + '</strong>/' + total + ' 条</span>' +
-      '<span class="coverage-pct">' + (total > 0 ? pct : '—') + '%</span>' +
-    '</div>' +
-    '<div class="coverage-bar-bg">' +
-      '<div class="coverage-bar-fill" style="width:' + pct + '%"></div>' +
-    '</div>' +
-    '<div class="coverage-books">' + booksHtml + '</div>';
+  // 增量更新 DOM，保留元素以实现平滑 CSS transition
+  var headerEl = container.querySelector('.coverage-header');
+  var wrapEl = container.querySelector('.coverage-progress-wrap');
+  var barBgEl = container.querySelector('.coverage-bar-bg');
+  var booksEl = container.querySelector('.coverage-books');
+
+  if (!headerEl) {
+    // 首次渲染：一次性构建
+    container.innerHTML =
+      '<div class="coverage-header">' +
+        '<span class="coverage-title">📊 回忆进度条</span>' +
+        '<span class="coverage-meta">' + metaText + '</span>' +
+      '</div>' +
+      '<div class="coverage-progress-wrap">' +
+        '<span class="coverage-label">已接触 <strong>' + seenCount + '</strong>/' + total + ' 条</span>' +
+        '<span class="coverage-pct">' + (total > 0 ? pct : '—') + '%</span>' +
+      '</div>' +
+      '<div class="coverage-bar-bg">' +
+        '<div class="coverage-bar-fill" style="width:' + pct + '%"></div>' +
+      '</div>' +
+      '<div class="coverage-books">' + booksHtml + '</div>';
+  } else {
+    // 增量更新已有元素
+    var metaEl = headerEl.querySelector('.coverage-meta');
+    if (metaEl) metaEl.textContent = metaText;
+
+    if (wrapEl) {
+      var labelStrong = wrapEl.querySelector('.coverage-label strong');
+      var pctEl = wrapEl.querySelector('.coverage-pct');
+      if (labelStrong) {
+        var prevVal = labelStrong.getAttribute('data-val');
+        var newVal = String(seenCount);
+        labelStrong.textContent = seenCount;
+        // 更新 /Y 条（strong 后的文本节点）
+        var next = labelStrong.nextSibling;
+        if (next) next.textContent = '/' + total + ' 条';
+        if (prevVal !== newVal) {
+          labelStrong.setAttribute('data-val', newVal);
+          labelStrong.style.animation = 'none';
+          labelStrong.offsetHeight;
+          labelStrong.style.animation = '';
+        }
+      }
+      if (pctEl) {
+        var newPct = (total > 0 ? pct : '—') + '%';
+        if (pctEl.textContent !== newPct) {
+          pctEl.textContent = newPct;
+          pctEl.style.animation = 'none';
+          pctEl.offsetHeight;
+          pctEl.style.animation = '';
+        }
+      }
+    }
+
+    if (barBgEl) {
+      var fillEl = barBgEl.querySelector('.coverage-bar-fill');
+      if (fillEl) {
+        var prevW = fillEl.getAttribute('data-pct');
+        var newW = String(pct);
+        if (prevW !== newW) {
+          fillEl.setAttribute('data-pct', newW);
+          fillEl.style.width = pct + '%';
+          // 重新触发 barFill 动画也用同样技巧
+          fillEl.style.animation = 'none';
+          fillEl.offsetHeight;
+          fillEl.style.animation = '';
+        }
+      }
+    }
+
+    if (booksEl) {
+      booksEl.innerHTML = booksHtml;
+    }
+  }
   // 如果之前处于展开状态，恢复展开
   if (_coverageExpanded) {
     showAllBooksPanel();

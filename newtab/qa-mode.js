@@ -11,16 +11,44 @@ function hideAllStates() {
   document.querySelectorAll('.state').forEach(function(s) { s.classList.remove('active'); });
 }
 
+function getDefaultModeStats(mode) {
+  if (mode === 'browse') {
+    return { todayDate: '', todaySeen: 0, streakDays: 0 };
+  }
+  return { todayDate: '', todayCorrect: 0, todayTotal: 0, streakDays: 0, masteryPercent: 0 };
+}
+
 async function getReviewStats() {
   return new Promise(resolve => {
     chrome.storage.local.get([REVIEW_STATS_KEY], r => {
-      resolve(r[REVIEW_STATS_KEY] || { todayDate: '', todayCorrect: 0, todayTotal: 0, streakDays: 0, masteryPercent: 0 });
+      let data = r[REVIEW_STATS_KEY] || {};
+      // 从旧格式（扁平）迁移到新格式（按模式嵌套）
+      if (data.qa === undefined && data.todayCorrect !== undefined) {
+        const migrated = {
+          qa: { ...data },
+          choice: getDefaultModeStats('choice'),
+          browse: getDefaultModeStats('browse')
+        };
+        chrome.storage.local.set({ [REVIEW_STATS_KEY]: migrated });
+        resolve(migrated);
+      } else {
+        // 确保各模式键都存在
+        ['qa', 'choice', 'browse'].forEach(function(m) {
+          if (!data[m]) data[m] = getDefaultModeStats(m);
+        });
+        resolve(data);
+      }
     });
   });
 }
 
 async function saveReviewStats(stats) {
   return new Promise(resolve => chrome.storage.local.set({ [REVIEW_STATS_KEY]: stats }, resolve));
+}
+
+function getModeForReview() {
+  return typeof currentMode !== 'undefined' && ['qa', 'choice', 'browse'].indexOf(currentMode) >= 0
+    ? currentMode : 'qa';
 }
 
 async function getLearningProgress() {
@@ -35,17 +63,24 @@ async function saveLearningProgress(progress) {
   return new Promise(resolve => chrome.storage.local.set({ [LEARNING_PROGRESS_KEY]: progress }, resolve));
 }
 
-async function recordAnswer(correct, bookName) {
+async function recordAnswer(correct, bookName, mode) {
+  mode = mode || getModeForReview();
+  // 选择题模式用 choice，其他模式用 qa
+  if (mode === 'choice') {/* ok */}
+  else if (mode === 'qa') {/* ok */}
+  else mode = 'qa'; // fallback
+
   const stats = await getReviewStats();
+  const ms = stats[mode];
   const today = new Date().toISOString().split('T')[0];
-  if (stats.todayDate !== today) {
-    stats.todayDate = today;
-    stats.todayCorrect = 0;
-    stats.todayTotal = 0;
+  if (ms.todayDate !== today) {
+    ms.todayDate = today;
+    ms.todayCorrect = 0;
+    ms.todayTotal = 0;
   }
-  stats.todayTotal++;
-  if (correct) stats.todayCorrect++;
-  stats.masteryPercent = Math.round((stats.todayCorrect / stats.todayTotal) * 100);
+  ms.todayTotal++;
+  if (correct) ms.todayCorrect++;
+  ms.masteryPercent = Math.round((ms.todayCorrect / ms.todayTotal) * 100);
   await saveReviewStats(stats);
 
   // 按书本追踪答题记录
@@ -59,6 +94,19 @@ async function recordAnswer(correct, bookName) {
     if (correct) progress[bookKey].correct++;
     await saveLearningProgress(progress);
   }
+}
+
+// 浏览模式：记录当日浏览的笔记数
+async function recordBrowseSeen(count) {
+  const stats = await getReviewStats();
+  const ms = stats.browse;
+  const today = new Date().toISOString().split('T')[0];
+  if (ms.todayDate !== today) {
+    ms.todayDate = today;
+    ms.todaySeen = 0;
+  }
+  ms.todaySeen += count;
+  await saveReviewStats(stats);
 }
 
 function renderQAMode(data, onResult) {

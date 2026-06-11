@@ -181,8 +181,18 @@ function updateStats() {
   if (reviewCorrectEl || reviewTotalEl) {
     chrome.storage.local.get(['wx_review_stats'], function(data) {
       const s = data.wx_review_stats || {};
-      if (reviewCorrectEl) reviewCorrectEl.textContent = s.todayCorrect || 0;
-      if (reviewTotalEl) reviewTotalEl.textContent = s.todayTotal || 0;
+      // 兼容新旧格式：旧格式直接有 todayCorrect，新格式分 qa/choice/browse
+      if (s.qa || s.choice) {
+        const qaTotal = (s.qa && s.qa.todayTotal) || 0;
+        const choiceTotal = (s.choice && s.choice.todayTotal) || 0;
+        const qaCorrect = (s.qa && s.qa.todayCorrect) || 0;
+        const choiceCorrect = (s.choice && s.choice.todayCorrect) || 0;
+        if (reviewCorrectEl) reviewCorrectEl.textContent = qaCorrect + choiceCorrect;
+        if (reviewTotalEl) reviewTotalEl.textContent = qaTotal + choiceTotal;
+      } else {
+        if (reviewCorrectEl) reviewCorrectEl.textContent = s.todayCorrect || 0;
+        if (reviewTotalEl) reviewTotalEl.textContent = s.todayTotal || 0;
+      }
     });
   }
   updateLearningStats();
@@ -191,10 +201,23 @@ function updateStats() {
 // ---- 今日学习统计 ----
 function updateLearningStats() {
   chrome.storage.local.get(['wx_review_stats', 'wx_learning_progress'], function(data) {
-    const reviewStats = data.wx_review_stats || {};
+    const s = data.wx_review_stats || {};
     const progress = data.wx_learning_progress || { seenNoteIds: [], bookAccuracy: {} };
 
-    if (statsMastery) statsMastery.textContent = (reviewStats.masteryPercent || 0) + '%';
+    // 兼容新旧格式
+    if (s.qa || s.choice) {
+      const qaCorrect = (s.qa && s.qa.todayCorrect) || 0;
+      const qaTotal = (s.qa && s.qa.todayTotal) || 0;
+      const choiceCorrect = (s.choice && s.choice.todayCorrect) || 0;
+      const choiceTotal = (s.choice && s.choice.todayTotal) || 0;
+      const totalCorrect = qaCorrect + choiceCorrect;
+      const totalQuestions = qaTotal + choiceTotal;
+      if (statsMastery) {
+        statsMastery.textContent = totalQuestions > 0 ? Math.round((totalCorrect / totalQuestions) * 100) + '%' : '—';
+      }
+    } else {
+      if (statsMastery) statsMastery.textContent = (s.masteryPercent || 0) + '%';
+    }
 
     const totalNotes = allNotes.length;
     const seenCount = progress.seenNoteIds ? progress.seenNoteIds.length : 0;
