@@ -239,65 +239,81 @@ function buildDocList() {
   });
   const docs = Object.values(docMap).sort((a, b) => a.path.localeCompare(b.path));
 
-  if (!docs.length) {
-    docList.innerHTML = '<p class="no-data">暂未导入 Markdown 文档。</p>';
-    return;
-  }
-
-  const dispExclude = new Set(excludeDocs);
-  const aiExclude = new Set(aiExcludeDocs);
-  let html = '';
-  docs.forEach(doc => {
-    const dispOff = dispExclude.has(doc.path);
-    const aiOff = aiExclude.has(doc.path);
-    html += `
-      <div class="book-item">
-        <div class="book-info">
-          <span class="book-name">${escapeHTML(doc.path)}</span>
-          <span class="book-note-count">${doc.fileCount} 条笔记</span>
-        </div>
-        <div class="toggle-col">
-          <label class="toggle">
-            <input type="checkbox" class="doc-toggle" data-doc="${escapeHTML(doc.path)}" ${dispOff ? '' : 'checked'} />
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="toggle-col ai">
-          <label class="toggle toggle-ai">
-            <input type="checkbox" class="doc-toggle-ai" data-doc="${escapeHTML(doc.path)}" ${aiOff ? '' : 'checked'} />
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-    `;
-  });
-  docList.innerHTML = html;
-
-  document.querySelectorAll('.doc-toggle').forEach(el => {
-    el.addEventListener('change', async (e) => {
-      const doc = e.target.dataset.doc;
-      if (e.target.checked) {
-        excludeDocs = excludeDocs.filter(d => d !== doc);
-      } else {
-        if (!excludeDocs.includes(doc)) excludeDocs.push(doc);
-      }
-      await saveData();
-      updateStats();
+  // 检查是否有来源中的文件未产生笔记（空文件）
+  chrome.storage.local.get(['wx_md_sources'], function(mdData) {
+    var sources = mdData.wx_md_sources || [];
+    var emptyFiles = 0;
+    sources.forEach(function(src) {
+      var bookNotes = mdNotes.filter(function(n) { return n.book === src.name; });
+      var uniquePaths = new Set(bookNotes.map(function(n) { return n.filePath; }));
+      var gap = src.fileCount - uniquePaths.size;
+      if (gap > 0) emptyFiles += gap;
     });
-  });
 
-  document.querySelectorAll('.doc-toggle-ai').forEach(el => {
-    el.addEventListener('change', async (e) => {
-      const doc = e.target.dataset.doc;
-      if (e.target.checked) {
-        aiExcludeDocs = aiExcludeDocs.filter(d => d !== doc);
-      } else {
-        if (!aiExcludeDocs.includes(doc)) aiExcludeDocs.push(doc);
-      }
-      await saveData();
+    var noData = !docs.length && emptyFiles === 0;
+    if (noData) {
+      docList.innerHTML = '<p class="no-data">暂未导入 Markdown 文档。</p>';
+      return;
+    }
+
+    const dispExclude = new Set(excludeDocs);
+    const aiExclude = new Set(aiExcludeDocs);
+    let html = '';
+    docs.forEach(function(doc) {
+      const dispOff = dispExclude.has(doc.path);
+      const aiOff = aiExclude.has(doc.path);
+      html +=
+        '<div class="book-item">' +
+          '<div class="book-info">' +
+            '<span class="book-name">' + escapeHTML(doc.path) + '</span>' +
+            '<span class="book-note-count">' + doc.fileCount + ' 条笔记</span>' +
+          '</div>' +
+          '<div class="toggle-col">' +
+            '<label class="toggle">' +
+              '<input type="checkbox" class="doc-toggle" data-doc="' + escapeHTML(doc.path) + '" ' + (dispOff ? '' : 'checked') + ' />' +
+              '<span class="slider"></span>' +
+            '</label>' +
+          '</div>' +
+          '<div class="toggle-col ai">' +
+            '<label class="toggle toggle-ai">' +
+              '<input type="checkbox" class="doc-toggle-ai" data-doc="' + escapeHTML(doc.path) + '" ' + (aiOff ? '' : 'checked') + ' />' +
+              '<span class="slider"></span>' +
+            '</label>' +
+          '</div>' +
+        '</div>';
     });
-  });
-}
+    if (emptyFiles > 0) {
+      html += '<p style="font-size:11px;color:#999;padding:4px 0;margin:0;">⚠️ 另有 ' + emptyFiles + ' 个空文件未产生笔记</p>';
+    }
+    docList.innerHTML = html;
+
+    // 事件绑定必须在 DOM 更新后执行
+    document.querySelectorAll('.doc-toggle').forEach(function(el) {
+      el.addEventListener('change', async function(e) {
+        const doc = e.target.dataset.doc;
+        if (e.target.checked) {
+          excludeDocs = excludeDocs.filter(function(d) { return d !== doc; });
+        } else {
+          if (excludeDocs.indexOf(doc) === -1) excludeDocs.push(doc);
+        }
+        await saveData();
+        updateStats();
+      });
+    });
+
+    document.querySelectorAll('.doc-toggle-ai').forEach(function(el) {
+      el.addEventListener('change', async function(e) {
+        const doc = e.target.dataset.doc;
+        if (e.target.checked) {
+          aiExcludeDocs = aiExcludeDocs.filter(function(d) { return d !== doc; });
+        } else {
+          if (aiExcludeDocs.indexOf(doc) === -1) aiExcludeDocs.push(doc);
+        }
+        await saveData();
+      });
+    });
+  }); // chrome.storage.local.get callback end
+} // buildDocList end
 
 // ---- Refresh entire UI ----
 function refreshUI() {
