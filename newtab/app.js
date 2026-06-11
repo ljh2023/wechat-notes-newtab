@@ -717,7 +717,7 @@ async function updateCoverageDisplay() {
     var sourceForBooks = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
     bookList = [];
     sourceForBooks.forEach(function(n) {
-      var name = n.book || '(未归类)';
+      var name = getNoteGroupKey(n);
       if (bookList.indexOf(name) === -1) bookList.push(name);
     });
 
@@ -834,7 +834,7 @@ function selectBook(bookName) {
   shownIds = [];
   noteHistory = [];
   updateFiltered();
-  addBrowseLog('selectBook', selectedBook ? '选中「' + selectedBook + '」' : '取消筛选', { prevBook: prevBook });
+  addBrowseLog('selectBook', selectedBook ? '选中「' + selectedBook + '」' : '取消筛选');
   if (currentMode === 'browse') {
     switchToNext();
   } else {
@@ -941,7 +941,7 @@ function showAllBooksPanel() {
     });
 
     var sourceForBooks = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
-    var uniqueBooks = sourceForBooks.map(function(n) { return n.book; }).filter(Boolean).filter(function(v, i, a) { return a.indexOf(v) === i; });
+    var uniqueBooks = sourceForBooks.map(function(n) { return getNoteGroupKey(n); }).filter(function(v, i, a) { return v && a.indexOf(v) === i; });
 
     var containerId = currentMode === 'qa' ? 'coverage-qa' : currentMode === 'choice' ? 'coverage-choice' : 'coverage-browse';
     var container = document.getElementById(containerId);
@@ -965,10 +965,22 @@ function showAllBooksPanel() {
   });
 }
 
+// 笔记在进度条面板中的显示/分组键：
+// - 微信读书笔记 → 书名 (n.book)
+// - Markdown 笔记 → 文件名 (n.filePath)
+function getNoteGroupKey(n) {
+  if (n.source === 'markdown' && n.filePath) {
+    // 提取文件名（去掉路径部分）
+    var parts = n.filePath.replace(/\\/g, '/').split('/');
+    return parts[parts.length - 1] || n.book || '未知';
+  }
+  return n.book || '(未归类)';
+}
+
 function applyBookFilter() {
   if (selectedBook !== null) {
     filteredNotes = filteredNotes.filter(function(n) {
-      return (n.book || '').trim() === selectedBook;
+      return getNoteGroupKey(n) === selectedBook;
     });
   }
 }
