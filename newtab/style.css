@@ -607,8 +607,7 @@ a {
   border-radius: 2px;
   position: relative;
   overflow: hidden;
-  animation: barFill 0.4s ease-out both;
-  transform-origin: left center;
+  transition: width 0.35s ease;
 }
 .coverage-bar-fill::after {
   content: '';
@@ -616,10 +615,6 @@ a {
   top: 0; left: 0; right: 0; bottom: 0;
   background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%);
   animation: barShine 0.6s ease-out 0.15s both;
-}
-@keyframes barFill {
-  0% { transform: scaleX(0); }
-  100% { transform: scaleX(1); }
 }
 @keyframes barShine {
   0% { transform: translateX(-100%); }

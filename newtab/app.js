@@ -71,6 +71,16 @@ function restartAnimation(el) {
   el.style.animation = '';
 }
 
+// 检查笔记来源是否在已启用的数据源中
+function isSourceEnabled(srcType, enabledSources) {
+  if (!enabledSources || enabledSources.length === 0) return true;
+  return enabledSources.some(function(s) {
+    if (s === 'weread' && srcType === 'weread') return true;
+    if (s.startsWith('md_') && srcType === 'markdown') return true;
+    return false;
+  });
+}
+
 // ---- Show/hide states ----
 function showState(name) {
   document.querySelectorAll('.state').forEach(function(s) { s.classList.remove('active'); });
@@ -97,14 +107,7 @@ function updateFiltered() {
     var enabledSources = srcKeys.filter(function(k) { return sourceEnabled[k]; });
     if (enabledSources.length > 0) {
       candidates = allNotes.filter(function(n) {
-        var src = n.source || 'weread';
-        return enabledSources.some(function(s) {
-          // Match weread notes (no source field) against "weread" key
-          if (s === 'weread' && src === 'weread') return true;
-          // Match markdown notes against "md_<name>" keys
-          if (s.startsWith('md_') && src === 'markdown') return true;
-          return false;
-        });
+        return isSourceEnabled(n.source || 'weread', enabledSources);
       });
       if (candidates.length === 0 && allNotes.length > 0) {
         // Notes exist but none match enabled sources — don't show all-off
@@ -472,13 +475,7 @@ function loadPrevInMode() {
       if (srcKeys.length > 0) {
         var enabledSrcs = srcKeys.filter(function(k) { return sourceEnabled[k]; });
         if (enabledSrcs.length > 0) {
-          var itemSrcType = item.srcType || 'weread';
-          var srcMatch = enabledSrcs.some(function(s) {
-            if (s === 'weread' && itemSrcType === 'weread') return true;
-            if (s.startsWith('md_') && itemSrcType === 'markdown') return true;
-            return false;
-          });
-          if (!srcMatch) continue;
+          if (!isSourceEnabled(item.srcType || 'weread', enabledSrcs)) continue;
         }
       }
       // 跳过不匹配选中书籍的条目
@@ -531,12 +528,7 @@ function loadNextInMode(skipCurrent) {
         var enabledSrcs = srcKeys.filter(function(k) { return sourceEnabled[k]; });
         if (enabledSrcs.length > 0) {
           var itemSrcType = item.srcType || 'weread';
-          var srcMatch = enabledSrcs.some(function(s) {
-            if (s === 'weread' && itemSrcType === 'weread') return true;
-            if (s.startsWith('md_') && itemSrcType === 'markdown') return true;
-            return false;
-          });
-          if (!srcMatch) continue; // 跳过不匹配来源的条目
+          if (!isSourceEnabled(item.srcType || 'weread', enabledSrcs)) continue; // 跳过不匹配来源的条目
         }
       }
       // 跳过不匹配选中书籍的条目
@@ -645,42 +637,70 @@ function markNoteAsSeen(noteId) {
   }
 }
 
+let _flushingSeen = false;
 async function flushSeenIds() {
+  if (_flushingSeen) return; // 防止并发 flush
+  _flushingSeen = true;
   seenFlushTimer = null;
-  if (pendingSeenIds.size === 0) return;
-  const ids = [...pendingSeenIds];
-  pendingSeenIds.clear();
-  const result = await new Promise(resolve => chrome.storage.local.get('wx_learning_progress', resolve));
-  const progress = result.wx_learning_progress || {};
-  if (!progress.seenNoteIds) progress.seenNoteIds = [];
-  let newCount = 0;
-  ids.forEach(function(id) {
-    if (progress.seenNoteIds.indexOf(id) === -1) {
-      progress.seenNoteIds.push(id);
-      newCount++;
+  try {
+    if (pendingSeenIds.size === 0) return;
+    const ids = [...pendingSeenIds];
+    const result = await new Promise(resolve => chrome.storage.local.get('wx_learning_progress', resolve));
+    if (chrome.runtime.lastError) {
+      console.error('flushSeenIds: 读取失败', chrome.runtime.lastError);
+      return;
     }
-  });
-  await new Promise(resolve => chrome.storage.local.set({ wx_learning_progress: progress }, resolve));
-  // 同步记录浏览模式的今日已阅数
-  if (newCount > 0 && typeof recordBrowseSeen === 'function') {
-    await recordBrowseSeen(newCount);
-  }
-  // 新笔记已写入，刷新覆盖度面板
-  if (newCount > 0 && typeof updateCoverageDisplay === 'function') {
-    addBrowseLog('flushSeen', '刷入 ' + newCount + ' 条新浏览', { totalSeen: progress.seenNoteIds.length });
-    await updateCoverageDisplay();
+    const progress = result.wx_learning_progress || {};
+    if (!progress.seenNoteIds) progress.seenNoteIds = [];
+    let newCount = 0;
+    ids.forEach(function(id) {
+      if (progress.seenNoteIds.indexOf(id) === -1) {
+        progress.seenNoteIds.push(id);
+        newCount++;
+      }
+    });
+    await new Promise((resolve, reject) => {
+      chrome.storage.local.set({ wx_learning_progress: progress }, function() {
+        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+        else resolve();
+      });
+    });
+    // 写入成功后才清除 pending 队列
+    pendingSeenIds.clear();
+    // 同步记录浏览模式的今日已阅数
+    if (newCount > 0 && typeof recordBrowseSeen === 'function') {
+      await recordBrowseSeen(newCount);
+    }
+    // 新笔记已写入，刷新覆盖度面板
+    if (newCount > 0 && typeof updateCoverageDisplay === 'function') {
+      addBrowseLog('flushSeen', '刷入 ' + newCount + ' 条新浏览', { totalSeen: progress.seenNoteIds.length });
+      await updateCoverageDisplay();
+    }
+  } catch (err) {
+    console.error('flushSeenIds 失败:', err);
+    addBrowseLog('flushSeen', '写入失败', { error: err.message });
+    // 不清除 pendingSeenIds，下次重试
+  } finally {
+    _flushingSeen = false;
   }
 }
 
 // ---- 覆盖度面板 ----
 async function updateCoverageDisplay() {
-  const result = await new Promise(resolve => chrome.storage.local.get(['wx_learning_progress', 'wx_review_stats'], resolve));
-  const progress = result.wx_learning_progress || {};
-  const allStats = result.wx_review_stats || {};
-  // 确保各模式统计存在
-  if (!allStats.qa) allStats.qa = { todayDate: '', todayCorrect: 0, todayTotal: 0, streakDays: 0, masteryPercent: 0 };
-  if (!allStats.choice) allStats.choice = { todayDate: '', todayCorrect: 0, todayTotal: 0, streakDays: 0, masteryPercent: 0 };
-  if (!allStats.browse) allStats.browse = { todayDate: '', todaySeen: 0, streakDays: 0 };
+  var progress, allStats;
+  try {
+    const result = await Promise.all([
+      new Promise(resolve => chrome.storage.local.get('wx_learning_progress', resolve)),
+      (typeof getReviewStats === 'function' ? getReviewStats() : Promise.resolve({}))
+    ]);
+    progress = (result[0]).wx_learning_progress || {};
+    allStats = result[1];
+    // getReviewStats 已处理迁移和默认值，直接使用
+  } catch (e) {
+    console.error('updateCoverageDisplay 读取失败', e);
+    addBrowseLog('coverage', '读取失败', { error: e.message });
+    return;
+  }
 
   // 选择当前活跃模式的容器
   const isQaMode = currentMode === 'qa' || currentMode === 'choice';
@@ -701,13 +721,14 @@ async function updateCoverageDisplay() {
         qaAccuracy[bookName] = d.total > 0 ? Math.round((d.correct / d.total) * 100) : -1;
       }
     });
-    bookList = [];
+    var bookSet = new Set();
     if (typeof aiCache !== 'undefined') {
       aiCache.forEach(function(item) {
         var src = item.data ? item.data.source : null;
-        if (src && bookList.indexOf(src) === -1) bookList.push(src);
+        if (src) bookSet.add(src);
       });
     }
+    bookList = Array.from(bookSet);
     total = aiCache ? aiCache.length : 0;
     // "已接触" = 有 QA 答题记录的缓存来源数
     var touchedSources = 0;
@@ -723,11 +744,11 @@ async function updateCoverageDisplay() {
 
     // 书单用按书过滤前的笔记列表，点书筛选后其他书不会消失
     var sourceForBooks = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
-    bookList = [];
+    var bookSet = new Set();
     sourceForBooks.forEach(function(n) {
-      var name = getNoteGroupKey(n);
-      if (bookList.indexOf(name) === -1) bookList.push(name);
+      bookSet.add(getNoteGroupKey(n));
     });
+    bookList = Array.from(bookSet);
 
     qaAccuracy = {};
     Object.keys(progress).forEach(function(key) {
@@ -823,7 +844,6 @@ async function updateCoverageDisplay() {
         if (prevW !== newW) {
           fillEl.setAttribute('data-pct', newW);
           fillEl.style.width = pct + '%';
-          restartAnimation(fillEl);
         }
       }
     }
@@ -954,7 +974,7 @@ function showAllBooksPanel() {
     });
 
     var sourceForBooks = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
-    var uniqueBooks = sourceForBooks.map(function(n) { return getNoteGroupKey(n); }).filter(function(v, i, a) { return v && a.indexOf(v) === i; });
+    var uniqueBooks = Array.from(new Set(sourceForBooks.map(function(n) { return getNoteGroupKey(n); }).filter(Boolean)));
 
     // qaAccuracy 按 book（文件夹名）存储，而 getNoteGroupKey 对 MD 返回文件名 → 建立映射
     var displayToBook = {};
@@ -1008,7 +1028,7 @@ function applyBookFilter() {
 }
 
 async function initCoveragePanel() {
-  updateCoverageDisplay();
+  await updateCoverageDisplay();
 }
 
 // ---- Init ----
@@ -1027,7 +1047,7 @@ async function init() {
     updateFiltered();
     stats.excluded = allNotes.length - filteredNotes.length;
 
-    initCoveragePanel();
+    await initCoveragePanel();
     addBrowseLog('init', '数据就绪', { allNotes: allNotes.length, filtered: filteredNotes.length, excluded: stats.excluded, mode: currentMode });
 
     if (!allNotes.length) {

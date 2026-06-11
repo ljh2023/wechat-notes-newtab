@@ -18,9 +18,22 @@ function getDefaultModeStats(mode) {
   return { todayDate: '', todayCorrect: 0, todayTotal: 0, streakDays: 0, masteryPercent: 0 };
 }
 
+// 简单写锁防止 wx_review_stats 并发写竞争
+var _statsPromise = Promise.resolve();
+
+function queueStatsWrite(fn) {
+  _statsPromise = _statsPromise.then(fn, fn);
+  return _statsPromise;
+}
+
 async function getReviewStats() {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     chrome.storage.local.get([REVIEW_STATS_KEY], r => {
+      if (chrome.runtime.lastError) {
+        console.error('getReviewStats 失败', chrome.runtime.lastError);
+        reject(chrome.runtime.lastError);
+        return;
+      }
       let data = r[REVIEW_STATS_KEY] || {};
       // 从旧格式（扁平）迁移到新格式（按模式嵌套）
       if (data.qa === undefined && data.todayCorrect !== undefined) {
@@ -43,7 +56,16 @@ async function getReviewStats() {
 }
 
 async function saveReviewStats(stats) {
-  return new Promise(resolve => chrome.storage.local.set({ [REVIEW_STATS_KEY]: stats }, resolve));
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set({ [REVIEW_STATS_KEY]: stats }, function() {
+      if (chrome.runtime.lastError) {
+        console.error('saveReviewStats 失败', chrome.runtime.lastError);
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 function getModeForReview() {
@@ -68,18 +90,20 @@ async function recordAnswer(correct, bookName, mode) {
   // 只有 qa 和 choice 有答题统计，其它 mode 降级为 qa
   if (mode !== 'choice' && mode !== 'qa') mode = 'qa';
 
-  const stats = await getReviewStats();
-  const ms = stats[mode];
-  const today = new Date().toISOString().split('T')[0];
-  if (ms.todayDate !== today) {
-    ms.todayDate = today;
-    ms.todayCorrect = 0;
-    ms.todayTotal = 0;
-  }
-  ms.todayTotal++;
-  if (correct) ms.todayCorrect++;
-  ms.masteryPercent = Math.round((ms.todayCorrect / ms.todayTotal) * 100);
-  await saveReviewStats(stats);
+  await queueStatsWrite(async function() {
+    const stats = await getReviewStats();
+    const ms = stats[mode];
+    const today = new Date().toISOString().split('T')[0];
+    if (ms.todayDate !== today) {
+      ms.todayDate = today;
+      ms.todayCorrect = 0;
+      ms.todayTotal = 0;
+    }
+    ms.todayTotal++;
+    if (correct) ms.todayCorrect++;
+    ms.masteryPercent = Math.round((ms.todayCorrect / ms.todayTotal) * 100);
+    await saveReviewStats(stats);
+  });
 
   // 按书本追踪答题记录
   if (bookName) {
@@ -96,15 +120,18 @@ async function recordAnswer(correct, bookName, mode) {
 
 // 浏览模式：记录当日浏览的笔记数
 async function recordBrowseSeen(count) {
-  const stats = await getReviewStats();
-  const ms = stats.browse;
-  const today = new Date().toISOString().split('T')[0];
-  if (ms.todayDate !== today) {
-    ms.todayDate = today;
-    ms.todaySeen = 0;
-  }
-  ms.todaySeen += count;
-  await saveReviewStats(stats);
+  if (typeof count !== 'number' || count < 1) return;
+  await queueStatsWrite(async function() {
+    const stats = await getReviewStats();
+    const ms = stats.browse;
+    const today = new Date().toISOString().split('T')[0];
+    if (ms.todayDate !== today) {
+      ms.todayDate = today;
+      ms.todaySeen = 0;
+    }
+    ms.todaySeen += count;
+    await saveReviewStats(stats);
+  });
 }
 
 function renderQAMode(data, onResult) {
