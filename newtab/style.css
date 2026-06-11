@@ -63,14 +63,13 @@ a {
   display: flex;
 }
 
-/* 滚动区域：短内容居中，长内容可滚 */
+/* 卡片容器：短内容居中占满，长内容自然撑大 */
 .state-scroll {
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 0;
   width: 100%;
   max-width: 680px;
 }
@@ -363,7 +362,7 @@ a {
 /* ---- Mode Dropdown ---- */
 .mode-select-wrap {
   position: fixed;
-  bottom: 20px;
+  top: 20px;
   left: 20px;
   z-index: 100;
 }
@@ -474,7 +473,7 @@ a {
 /* ---- Settings FAB ---- */
 .settings-fab {
   position: fixed;
-  bottom: 20px;
+  top: 20px;
   right: 20px;
   width: 42px;
   height: 42px;
@@ -543,4 +542,94 @@ a {
   font-size: 12px;
   color: var(--text-tertiary);
   text-align: center;
+}
+
+/* ---- Coverage Panel ---- */
+.coverage-panel {
+  width: 100%;
+  padding: 3px 24px 10px;
+  background: #faf9f6;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.coverage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+.coverage-title {
+  font-weight: 600;
+  color: #2c2c2c;
+  font-size: 12px;
+}
+.coverage-meta {
+  font-size: 11px;
+  color: #8b8579;
+}
+.coverage-progress-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.coverage-label {
+  font-size: 10px;
+  color: #8b8579;
+}
+.coverage-pct {
+  font-size: 10px;
+  font-weight: 600;
+  color: #5a7a5a;
+}
+.coverage-bar-bg {
+  height: 4px;
+  background: #e8e3da;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.coverage-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5a7a5a, #8ab88a);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.coverage-books {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.coverage-book-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #666;
+  transition: all 0.15s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+.coverage-book-chip.active {
+  background: #5a7a5a;
+  border-color: #5a7a5a;
+  color: #fff;
+  font-weight: 600;
+}
+.coverage-book-chip.weak {
+  border-color: #f0d9b5;
+}
+.coverage-book-chip.all-books {
+  color: #5a7a5a;
+  background: #e8f0e8;
+  border-color: #c8dcc8;
+}
+.coverage-books.expanded {
+  max-height: 160px;
+  overflow-y: auto;
 }

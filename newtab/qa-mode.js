@@ -2,6 +2,9 @@
    微信书摘 · 新标签页 — 问答/选择题模式
    ============================================ */
 const REVIEW_STATS_KEY = 'wx_review_stats';
+const LEARNING_PROGRESS_KEY = 'wx_learning_progress';
+
+let _currentQuestionBook = null;
 
 // ---- 隐藏所有状态 ----
 function hideAllStates() {
@@ -20,7 +23,19 @@ async function saveReviewStats(stats) {
   return new Promise(resolve => chrome.storage.local.set({ [REVIEW_STATS_KEY]: stats }, resolve));
 }
 
-async function recordAnswer(correct) {
+async function getLearningProgress() {
+  return new Promise(resolve => {
+    chrome.storage.local.get([LEARNING_PROGRESS_KEY], r => {
+      resolve(r[LEARNING_PROGRESS_KEY] || {});
+    });
+  });
+}
+
+async function saveLearningProgress(progress) {
+  return new Promise(resolve => chrome.storage.local.set({ [LEARNING_PROGRESS_KEY]: progress }, resolve));
+}
+
+async function recordAnswer(correct, bookName) {
   const stats = await getReviewStats();
   const today = new Date().toISOString().split('T')[0];
   if (stats.todayDate !== today) {
@@ -32,6 +47,18 @@ async function recordAnswer(correct) {
   if (correct) stats.todayCorrect++;
   stats.masteryPercent = Math.round((stats.todayCorrect / stats.todayTotal) * 100);
   await saveReviewStats(stats);
+
+  // 按书本追踪答题记录
+  if (bookName) {
+    const progress = await getLearningProgress();
+    const bookKey = '__book_qa__' + bookName;
+    if (!progress[bookKey]) {
+      progress[bookKey] = { correct: 0, total: 0 };
+    }
+    progress[bookKey].total++;
+    if (correct) progress[bookKey].correct++;
+    await saveLearningProgress(progress);
+  }
 }
 
 function renderQAMode(data, onResult) {
@@ -46,6 +73,7 @@ function renderQAMode(data, onResult) {
   if (sourceEl) {
     sourceEl.innerHTML = data.source ? '📖 ' + data.source : '';
   }
+  _currentQuestionBook = data.source || null;
 
   // 绑定导航按钮
   var nextBtn = document.getElementById('qaNext');
@@ -68,16 +96,20 @@ function renderQAMode(data, onResult) {
     feedbackDiv.style.display = 'block';
     feedbackDiv.innerHTML = '<p style="margin-bottom:8px;">你记住了吗？</p><button class="btn" id="feedbackCorrect" style="margin-right:8px;">记住了</button><button class="btn" id="feedbackWrong">没记住</button>';
     document.getElementById('feedbackCorrect').onclick = async () => {
-      await recordAnswer(true);
+      await recordAnswer(true, _currentQuestionBook);
       feedbackDiv.innerHTML = '<span style="color:var(--accent);font-weight:600;">太棒了！继续加油！</span>';
       if (onResult) onResult(true);
+      if (typeof updateCoverageDisplay === 'function') updateCoverageDisplay();
     };
     document.getElementById('feedbackWrong').onclick = async () => {
-      await recordAnswer(false);
+      await recordAnswer(false, _currentQuestionBook);
       feedbackDiv.innerHTML = '<span style="color:var(--danger);font-weight:600;">没关系，下次一定！</span>';
       if (onResult) onResult(false);
+      if (typeof updateCoverageDisplay === 'function') updateCoverageDisplay();
     };
   };
+  // 显示覆盖度面板
+  if (typeof updateCoverageDisplay === 'function') updateCoverageDisplay();
 }
 
 function renderChoiceMode(data, onResult) {
@@ -92,6 +124,7 @@ function renderChoiceMode(data, onResult) {
   if (sourceEl) {
     sourceEl.innerHTML = data.source ? '📖 ' + data.source : '';
   }
+  _currentQuestionBook = data.source || null;
 
   // 绑定导航按钮
   var nextBtn = document.getElementById('choiceNext');
@@ -121,8 +154,9 @@ function renderChoiceMode(data, onResult) {
         resultDiv.style.background = 'var(--accent-subtle)';
         resultDiv.style.color = 'var(--accent-hover)';
         resultDiv.innerHTML = '回答正确！';
-        await recordAnswer(true);
+        await recordAnswer(true, _currentQuestionBook);
         if (onResult) onResult(true);
+        if (typeof updateCoverageDisplay === 'function') updateCoverageDisplay();
       } else {
         btn.classList.add('wrong');
         optionsDiv.querySelectorAll('.choice-opt').forEach((b, i) => {
@@ -132,12 +166,15 @@ function renderChoiceMode(data, onResult) {
         resultDiv.style.background = 'var(--danger-bg)';
         resultDiv.style.color = 'var(--danger)';
         resultDiv.textContent = '答错了，正确答案是 ' + String.fromCharCode(65 + options.findIndex(o => o.correct));
-        await recordAnswer(false);
+        await recordAnswer(false, _currentQuestionBook);
         if (onResult) onResult(false);
+        if (typeof updateCoverageDisplay === 'function') updateCoverageDisplay();
       }
     };
     optionsDiv.appendChild(btn);
   });
+  // 显示覆盖度面板
+  if (typeof updateCoverageDisplay === 'function') updateCoverageDisplay();
 }
 
 function showAllOffState() {

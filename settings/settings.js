@@ -22,6 +22,8 @@ const statsTotal    = document.getElementById('statTotal');
 const statsActive   = document.getElementById('statActive');
 const statsExcluded = document.getElementById('statExcluded');
 const statsBooks    = document.getElementById('statBooks');
+const statsCoverage = document.getElementById('statCoverage');
+const statsMastery  = document.getElementById('statMastery');
 const btnClearAll   = document.getElementById('btnClearAll');
 const toast         = document.getElementById('toast');
 
@@ -183,6 +185,23 @@ function updateStats() {
       if (reviewTotalEl) reviewTotalEl.textContent = s.todayTotal || 0;
     });
   }
+  updateLearningStats();
+}
+
+// ---- 今日学习统计 ----
+function updateLearningStats() {
+  chrome.storage.local.get(['wx_review_stats', 'wx_learning_progress'], function(data) {
+    const reviewStats = data.wx_review_stats || {};
+    const progress = data.wx_learning_progress || { seenNoteIds: [], bookAccuracy: {} };
+
+    if (statsMastery) statsMastery.textContent = (reviewStats.masteryPercent || 0) + '%';
+
+    const totalNotes = allNotes.length;
+    const seenCount = progress.seenNoteIds ? progress.seenNoteIds.length : 0;
+    if (statsCoverage) {
+      statsCoverage.textContent = totalNotes > 0 ? Math.round((seenCount / totalNotes) * 100) + '%' : '—';
+    }
+  });
 }
 
 // ---- Build doc list ----

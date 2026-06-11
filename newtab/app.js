@@ -58,6 +58,10 @@ let aiCache = [];
 let cacheIndex = 0;
 let _currentCacheIdx = -1;
 let sourceEnabled = {};
+let selectedBook = null;
+let pendingSeenIds = new Set();
+let seenFlushTimer = null;
+let _coverageExpanded = false;
 
 // ---- Show/hide states ----
 function showState(name) {
@@ -114,6 +118,9 @@ function updateFiltered() {
   }
 
   filteredNotes = candidates;
+
+  // 按选中的书籍进一步过滤
+  applyBookFilter();
 
   // Show all-off state only when there are truly no notes after all filtering
   if (filteredNotes.length === 0 && allNotes.length > 0) {
@@ -276,6 +283,11 @@ function renderNote(note) {
     info += ' &middot; 已排除 ' + stats.excluded + ' 条';
   }
   footerInfo.innerHTML = info;
+
+  // 标记为已接触
+  if (currentNote && currentNote.id) {
+    markNoteAsSeen(currentNote.id);
+  }
 }
 
 function escapeHTML(str) {
@@ -421,6 +433,11 @@ function loadPrevInMode() {
           if (!srcMatch) continue;
         }
       }
+      // 跳过不匹配选中书籍的条目
+      if (selectedBook !== null) {
+        var itemSource = item.data ? item.data.source : null;
+        if (itemSource !== selectedBook) continue;
+      }
       if ((currentMode === 'qa' && item.type === 'qa') || (currentMode === 'choice' && item.type === 'choice')) {
         _currentCacheIdx = idx;
         cacheIndex = idx;
@@ -474,6 +491,11 @@ function loadNextInMode(skipCurrent) {
           if (!srcMatch) continue; // 跳过不匹配来源的条目
         }
       }
+      // 跳过不匹配选中书籍的条目
+      if (selectedBook !== null) {
+        var itemSource = item.data ? item.data.source : null;
+        if (itemSource !== selectedBook) continue;
+      }
       if ((currentMode === 'qa' && item.type === 'qa') || (currentMode === 'choice' && item.type === 'choice')) {
         _currentCacheIdx = idx;
         if (currentMode === 'qa') renderQAMode(item.data, onAnswerResult);
@@ -521,6 +543,9 @@ function displayKnowledgeItem(data) {
   // 推进索引避免重复
   cacheIndex = (_currentCacheIdx + 1) % aiCache.length;
   saveCacheIndex();
+  if (currentNote && currentNote.id) {
+    markNoteAsSeen(currentNote.id);
+  }
 }
 
 // 答对→移除，答错→保留轮转
@@ -563,11 +588,273 @@ async function restoreState() {
   });
 }
 
+// ---- 标记笔记为已接触（防抖写入） ----
+function markNoteAsSeen(noteId) {
+  if (!noteId) return;
+  pendingSeenIds.add(noteId);
+  if (!seenFlushTimer) {
+    seenFlushTimer = setTimeout(flushSeenIds, 2000);
+  }
+}
+
+async function flushSeenIds() {
+  seenFlushTimer = null;
+  if (pendingSeenIds.size === 0) return;
+  const ids = [...pendingSeenIds];
+  pendingSeenIds.clear();
+  const result = await new Promise(resolve => chrome.storage.local.get('wx_learning_progress', resolve));
+  const progress = result.wx_learning_progress || {};
+  if (!progress.seenNoteIds) progress.seenNoteIds = [];
+  ids.forEach(function(id) {
+    if (progress.seenNoteIds.indexOf(id) === -1) {
+      progress.seenNoteIds.push(id);
+    }
+  });
+  await new Promise(resolve => chrome.storage.local.set({ wx_learning_progress: progress }, resolve));
+}
+
+// ---- 覆盖度面板 ----
+async function updateCoverageDisplay() {
+  const result = await new Promise(resolve => chrome.storage.local.get(['wx_learning_progress', 'wx_review_stats'], resolve));
+  const progress = result.wx_learning_progress || {};
+  const stats = result.wx_review_stats || {};
+  const metaParts = [];
+  if (stats.todayTotal > 0) metaParts.push('今日 ' + stats.todayCorrect + '/' + stats.todayTotal);
+  if (stats.streakDays > 0) metaParts.push('🔥 ' + stats.streakDays + ' 天');
+  const metaText = metaParts.join(' · ');
+
+  // 选择当前活跃模式的容器
+  const isQaMode = currentMode === 'qa' || currentMode === 'choice';
+  const containerId = isQaMode ? (currentMode === 'qa' ? 'coverage-qa' : 'coverage-choice') : 'coverage-browse';
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  var bookList, seenCount, total, qaAccuracy;
+
+  if (isQaMode) {
+    // QA/选择题模式：基于缓存
+    qaAccuracy = {};
+    Object.keys(progress).forEach(function(key) {
+      if (key.indexOf('__book_qa__') === 0) {
+        var bookName = key.replace('__book_qa__', '');
+        var d = progress[key];
+        qaAccuracy[bookName] = d.total > 0 ? Math.round((d.correct / d.total) * 100) : -1;
+      }
+    });
+    bookList = [];
+    if (typeof aiCache !== 'undefined') {
+      aiCache.forEach(function(item) {
+        var src = item.data ? item.data.source : null;
+        if (src && bookList.indexOf(src) === -1) bookList.push(src);
+      });
+    }
+    total = aiCache ? aiCache.length : 0;
+    // "已接触" = 有 QA 答题记录的缓存来源数
+    var touchedSources = 0;
+    bookList.forEach(function(b) {
+      if (qaAccuracy[b] >= 0) touchedSources++;
+    });
+    seenCount = touchedSources;
+  } else {
+    // 浏览模式：基于笔记
+    const seenIds = progress.seenNoteIds || [];
+    seenCount = seenIds.length;
+    total = allNotes.length;
+
+    bookList = [];
+    allNotes.forEach(function(n) {
+      var name = n.book || '(未归类)';
+      if (bookList.indexOf(name) === -1) bookList.push(name);
+    });
+
+    qaAccuracy = {};
+    Object.keys(progress).forEach(function(key) {
+      if (key.indexOf('__book_qa__') === 0) {
+        var bookName = key.replace('__book_qa__', '');
+        var d = progress[key];
+        qaAccuracy[bookName] = d.total > 0 ? Math.round((d.correct / d.total) * 100) : -1;
+      }
+    });
+  }
+
+  const pct = total > 0 ? Math.round((seenCount / total) * 100) : 0;
+
+  let booksHtml = '';
+  if (bookList.length > 0) {
+    booksHtml = buildBookChipsHtml(bookList, qaAccuracy);
+  }
+
+  container.innerHTML =
+    '<div class="coverage-header">' +
+      '<span class="coverage-title">📊 复习覆盖度</span>' +
+      '<span class="coverage-meta">' + metaText + '</span>' +
+    '</div>' +
+    '<div class="coverage-progress-wrap">' +
+      '<span class="coverage-label">已接触 <strong>' + seenCount + '</strong>/' + total + ' 条</span>' +
+      '<span class="coverage-pct">' + (total > 0 ? pct : '—') + '%</span>' +
+    '</div>' +
+    '<div class="coverage-bar-bg">' +
+      '<div class="coverage-bar-fill" style="width:' + pct + '%"></div>' +
+    '</div>' +
+    '<div class="coverage-books">' + booksHtml + '</div>';
+  // 如果之前处于展开状态，恢复展开
+  if (_coverageExpanded) {
+    showAllBooksPanel();
+  }
+}
+
+function selectBook(bookName) {
+  selectedBook = bookName === selectedBook ? null : bookName;
+  shownIds = [];
+  noteHistory = [];
+  updateFiltered();
+  if (currentMode === 'browse') {
+    switchToNext();
+  } else {
+    cacheIndex = 0;
+    loadNextInMode();
+  }
+  // 仅更新芯片高亮，不重绘整个面板
+  updateBookChipHighlight();
+}
+
+function updateBookChipHighlight() {
+  var chips = document.querySelectorAll('.coverage-book-chip');
+  for (var i = 0; i < chips.length; i++) {
+    var chip = chips[i];
+    var action = chip.dataset.action;
+    if (action === 'random') {
+      if (selectedBook === null) chip.classList.add('active');
+      else chip.classList.remove('active');
+    } else if (action === 'select') {
+      if (chip.dataset.book === selectedBook) chip.classList.add('active');
+      else chip.classList.remove('active');
+    }
+  }
+}
+
+function buildBookChipsHtml(bookList, qaAccuracy) {
+  // 排序：有 QA 数据的优先，正确率低的优先
+  var sorted = bookList.slice().sort(function(a, b) {
+    var accA = qaAccuracy[a] >= 0 ? qaAccuracy[a] : 100;
+    var accB = qaAccuracy[b] >= 0 ? qaAccuracy[b] : 100;
+    if (accA < 60 && accB >= 60) return -1;
+    if (accB < 60 && accA >= 60) return 1;
+    return a.localeCompare(b);
+  });
+
+  // 🎲 随机按钮
+  var html = '<span class="coverage-book-chip' + (selectedBook === null ? ' active' : '') + '" data-action="random">🎲 随机</span>';
+
+  // 前 4 本（短书名优先）
+  var visible = [];
+  var remaining = [];
+  sorted.forEach(function(name) {
+    if (visible.length < 4 && name.length < 18) {
+      visible.push(name);
+    } else if (visible.length < 4 && remaining.length === 0) {
+      visible.push(name);
+    } else {
+      remaining.push(name);
+    }
+  });
+
+  visible.forEach(function(name) {
+    var pct = qaAccuracy[name];
+    var hasData = pct >= 0;
+    var isWeak = hasData && pct < 60;
+    var weakClass = isWeak ? ' weak' : '';
+    var activeClass = name === selectedBook ? ' active' : '';
+    var label = hasData ? (isWeak ? pct + '% ⚠️' : pct + '%') : '—';
+    html += '<span class="coverage-book-chip' + weakClass + activeClass + '" data-action="select" data-book="' + escapeHTML(name) + '" title="' + escapeHTML(name) + '">📖 <span class="chip-name">' + escapeHTML(name) + '</span> ' + label + '</span>';
+  });
+
+  if (remaining.length > 0) {
+    html += '<span class="coverage-book-chip all-books" data-action="showAll">📚 全部 ' + sorted.length + ' 本 →</span>';
+  }
+
+  return html;
+}
+
+// 初始化覆盖度面板的点击事件（仅执行一次）
+var _coverageHandlerInited = false;
+function initCoverageClickHandler() {
+  if (_coverageHandlerInited) return;
+  _coverageHandlerInited = true;
+  document.addEventListener('click', function(e) {
+    var chip = e.target.closest('.coverage-book-chip');
+    if (!chip) return;
+    var action = chip.dataset.action;
+    if (action === 'random') {
+      selectBook(null);
+    } else if (action === 'select') {
+      selectBook(chip.dataset.book);
+    } else if (action === 'showAll') {
+      _coverageExpanded = true;
+      showAllBooksPanel();
+    } else if (action === 'collapse') {
+      _coverageExpanded = false;
+      updateCoverageDisplay();
+    }
+  });
+}
+
+function showAllBooksPanel() {
+  chrome.storage.local.get(['wx_learning_progress'], function(data) {
+    var progress = data.wx_learning_progress || {};
+
+    // 读取 QA 正确率
+    var qaAccuracy = {};
+    Object.keys(progress).forEach(function(key) {
+      if (key.indexOf('__book_qa__') === 0) {
+        var bookName = key.replace('__book_qa__', '');
+        var d = progress[key];
+        qaAccuracy[bookName] = d.total > 0 ? Math.round((d.correct / d.total) * 100) : -1;
+      }
+    });
+
+    var uniqueBooks = allNotes.map(function(n) { return n.book; }).filter(Boolean).filter(function(v, i, a) { return a.indexOf(v) === i; });
+
+    var containerId = currentMode === 'qa' ? 'coverage-qa' : currentMode === 'choice' ? 'coverage-choice' : 'coverage-browse';
+    var container = document.getElementById(containerId);
+    if (!container) return;
+
+    var booksContainer = container.querySelector('.coverage-books');
+    if (!booksContainer) return;
+
+    var html = '<span class="coverage-book-chip' + (selectedBook === null ? ' active' : '') + '" data-action="random">🎲 随机</span>';
+    uniqueBooks.forEach(function(book) {
+      var pct = qaAccuracy[book];
+      var hasData = pct >= 0;
+      var isWeak = hasData && pct < 60;
+      var weakClass = isWeak ? ' weak' : '';
+      var activeClass = book === selectedBook ? ' active' : '';
+      var label = hasData ? (isWeak ? pct + '% ⚠️' : pct + '%') : '—';
+      html += '<span class="coverage-book-chip' + weakClass + activeClass + '" data-action="select" data-book="' + escapeHTML(book) + '" title="' + escapeHTML(book) + '">📖 <span class="chip-name">' + escapeHTML(book) + '</span> ' + label + '</span>';
+    });
+    html += '<span class="coverage-book-chip all-books active" data-action="collapse">↑ 收起</span>';
+    booksContainer.innerHTML = html;
+  });
+}
+
+function applyBookFilter() {
+  if (selectedBook !== null) {
+    filteredNotes = allNotes.filter(function(n) {
+      return (n.book || '').trim() === selectedBook;
+    });
+  }
+}
+
+async function initCoveragePanel() {
+  updateCoverageDisplay();
+}
+
 // ---- Init ----
 async function init() {
   try {
     await restoreState();
     initModeSwitch();
+    initCoverageClickHandler();
     const data = await loadAll();
     allNotes = data[STORAGE_KEY] || [];
     const settings = data[SETTINGS_KEY] || {};
@@ -576,6 +863,8 @@ async function init() {
     stats.total = allNotes.length;
     updateFiltered();
     stats.excluded = allNotes.length - filteredNotes.length;
+
+    initCoveragePanel();
 
     if (!allNotes.length) {
       showState('empty');

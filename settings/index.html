@@ -21,7 +21,15 @@
         统计概览
       </h2>
 
-      <p style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">微信读书</p>
+      <p style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">📊 今日学习</p>
+      <div class="stats-grid" id="statsGridLearning">
+        <div class="stat-card"><span class="stat-num" id="statCoverage">—</span><span class="stat-label">📊 复习覆盖</span></div>
+        <div class="stat-card"><span class="stat-num" id="statMastery">—</span><span class="stat-label">🎯 正确率</span></div>
+        <div class="stat-card"><span class="stat-num" id="statReviewCorrect">0</span><span class="stat-label">今日答对</span></div>
+        <div class="stat-card"><span class="stat-num" id="statReviewTotal">0</span><span class="stat-label">今日答题</span></div>
+      </div>
+
+      <p style="font-size:13px;font-weight:600;color:var(--text-secondary);margin:12px 0 8px;">微信读书</p>
       <div class="stats-grid" id="statsGrid">
         <div class="stat-card"><span class="stat-num" id="statTotal">0</span><span class="stat-label">总笔记数</span></div>
         <div class="stat-card"><span class="stat-num" id="statActive">0</span><span class="stat-label">展示中</span></div>
@@ -33,8 +41,6 @@
       <div class="stats-grid" id="statsGridImport">
         <div class="stat-card"><span class="stat-num" id="statMdFiles">0</span><span class="stat-label">Markdown 文件</span></div>
         <div class="stat-card"><span class="stat-num" id="statMdNotes">0</span><span class="stat-label">导入笔记数</span></div>
-        <div class="stat-card"><span class="stat-num" id="statReviewCorrect">0</span><span class="stat-label">今日答对</span></div>
-        <div class="stat-card"><span class="stat-num" id="statReviewTotal">0</span><span class="stat-label">今日答题</span></div>
       </div>
     </section>
 
@@ -74,6 +80,21 @@
       <div id="syncResult" class="import-result"></div>
 
       <p class="sync-hint">💡 API Key 仅保存在本地浏览器中，不会上传到任何服务器。</p>
+    </section>
+
+    <!-- ===== 导入 Markdown 文件夹 ===== -->
+    <section class="section" id="section-md-import">
+      <h2 class="section-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        导入 Markdown 文件夹
+      </h2>
+      <p class="section-desc">导入 Obsidian 等文件夹中的 .md 文件，解析为笔记存入本地。</p>
+      <div class="upload-area" id="folderPicker">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <p>选择 Markdown 文件夹</p>
+        <span style="font-size:12px;color:var(--text-tertiary);">扩展会递归扫描文件夹内所有 .md 文件</span>
+      </div>
+      <div id="mdImportResult" class="import-result" style="display:none;margin-top:8px;"></div>
     </section>
 
     <!-- ===== 数据源管理 ===== -->
@@ -129,21 +150,6 @@
       <div class="status-line"><span class="status-dot idle" id="testDot"></span><span class="status-text idle" id="testText">填入 API Key 和模型名后测试连接</span></div>
       <div id="aiTestResult" class="import-result" style="display:none;margin-top:8px;"></div>
       <p class="sync-hint" style="margin-top:12px;">💡 API Key 仅保存在本地浏览器中。</p>
-    </section>
-
-    <!-- ===== 导入 Markdown 文件夹 ===== -->
-    <section class="section" id="section-md-import">
-      <h2 class="section-title">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        导入 Markdown 文件夹
-      </h2>
-      <p class="section-desc">导入 Obsidian 等文件夹中的 .md 文件，解析为笔记存入本地。</p>
-      <div class="upload-area" id="folderPicker">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        <p>选择 Markdown 文件夹</p>
-        <span style="font-size:12px;color:var(--text-tertiary);">扩展会递归扫描文件夹内所有 .md 文件</span>
-      </div>
-      <div id="mdImportResult" class="import-result" style="display:none;margin-top:8px;"></div>
     </section>
 
     <!-- ===== 排除书籍 ===== -->
@@ -249,16 +255,6 @@
       <p class="section-desc">清空所有导入的笔记数据。此操作不可撤销。</p>
       <button class="btn btn-danger-outline" id="btnClearAll">清空所有数据</button>
     </section>
-
-    <!-- ===== 运行日志 ===== -->
-    <details class="section" id="section-logs" style="padding:16px 32px;cursor:pointer;">
-      <summary style="font-size:14px;font-weight:600;color:var(--text-secondary);cursor:pointer;">📋 运行日志</summary>
-      <pre id="logEntries" style="margin-top:12px;max-height:300px;overflow-y:auto;font-family:var(--mono);font-size:12px;line-height:1.8;color:var(--text-secondary);white-space:pre-wrap;word-break:break-all;user-select:text;"></pre>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="btn btn-small" id="btnCopyLogs">📋 复制日志</button>
-        <button class="btn btn-small" id="btnClearLogs">清空日志</button>
-      </div>
-    </details>
 
     <!-- ===== Toast ===== -->
     <div id="toast" class="toast"></div>
