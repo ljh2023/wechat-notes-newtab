@@ -45,6 +45,7 @@ const toast        = document.getElementById('toast');
 // ---- State ----
 let allNotes = [];
 let filteredNotes = [];
+let _filteredBySource = []; // 按书过滤前的笔记（供进度条面板用）
 let shownIds = [];
 let noteHistory = [];  // 浏览历史（上一条用）
 let docKnowledgeList = [];  // 当前文档的知识点列表
@@ -118,6 +119,9 @@ function updateFiltered() {
   }
 
   filteredNotes = candidates;
+
+  // 保存按书过滤前的笔记列表（供进度条面板的书单用）
+  _filteredBySource = candidates;
 
   // 按选中的书籍进一步过滤
   applyBookFilter();
@@ -672,8 +676,10 @@ async function updateCoverageDisplay() {
     seenCount = filteredNotes.filter(n => seenIdSet.has(n.id)).length;
     total = filteredNotes.length;
 
+    // 书单用按书过滤前的笔记列表，点书筛选后其他书不会消失
+    var sourceForBooks = _filteredBySource && _filteredBySource.length ? _filteredBySource : filteredNotes;
     bookList = [];
-    filteredNotes.forEach(function(n) {
+    sourceForBooks.forEach(function(n) {
       var name = n.book || '(未归类)';
       if (bookList.indexOf(name) === -1) bookList.push(name);
     });
