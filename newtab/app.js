@@ -656,13 +656,13 @@ async function updateCoverageDisplay() {
     });
     seenCount = touchedSources;
   } else {
-    // 浏览模式：基于笔记
-    const seenIds = progress.seenNoteIds || [];
-    seenCount = seenIds.length;
-    total = allNotes.length;
+    // 浏览模式：基于笔记（尊重数据源/排除/选中书籍等过滤）
+    const seenIdSet = new Set(progress.seenNoteIds || []);
+    seenCount = filteredNotes.filter(n => seenIdSet.has(n.id)).length;
+    total = filteredNotes.length;
 
     bookList = [];
-    allNotes.forEach(function(n) {
+    filteredNotes.forEach(function(n) {
       var name = n.book || '(未归类)';
       if (bookList.indexOf(name) === -1) bookList.push(name);
     });
@@ -714,8 +714,8 @@ function selectBook(bookName) {
     cacheIndex = 0;
     loadNextInMode();
   }
-  // 仅更新芯片高亮，不重绘整个面板
-  updateBookChipHighlight();
+  // 重绘覆盖度面板（数字/书籍列表随选中书籍变化）
+  updateCoverageDisplay();
 }
 
 function updateBookChipHighlight() {
@@ -813,7 +813,7 @@ function showAllBooksPanel() {
       }
     });
 
-    var uniqueBooks = allNotes.map(function(n) { return n.book; }).filter(Boolean).filter(function(v, i, a) { return a.indexOf(v) === i; });
+    var uniqueBooks = filteredNotes.map(function(n) { return n.book; }).filter(Boolean).filter(function(v, i, a) { return a.indexOf(v) === i; });
 
     var containerId = currentMode === 'qa' ? 'coverage-qa' : currentMode === 'choice' ? 'coverage-choice' : 'coverage-browse';
     var container = document.getElementById(containerId);
@@ -839,7 +839,7 @@ function showAllBooksPanel() {
 
 function applyBookFilter() {
   if (selectedBook !== null) {
-    filteredNotes = allNotes.filter(function(n) {
+    filteredNotes = filteredNotes.filter(function(n) {
       return (n.book || '').trim() === selectedBook;
     });
   }
@@ -1185,6 +1185,7 @@ chrome.storage.onChanged.addListener((changes) => {
     if (currentNote && !allNotes.find(n => n.id === currentNote.id)) {
       switchToNext();
     }
+    updateCoverageDisplay();
   }
   if (changes[SETTINGS_KEY]) {
     const s = changes[SETTINGS_KEY].newValue || {};
@@ -1192,6 +1193,12 @@ chrome.storage.onChanged.addListener((changes) => {
     excludeDocs = s.excludedDocs || [];
     updateFiltered();
     stats.excluded = allNotes.length - filteredNotes.length;
+    updateCoverageDisplay();
+  }
+  if (changes[SOURCE_ENABLED_KEY]) {
+    sourceEnabled = changes[SOURCE_ENABLED_KEY].newValue || {};
+    updateFiltered();
+    updateCoverageDisplay();
   }
 });
 
