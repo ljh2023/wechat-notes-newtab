@@ -3,6 +3,7 @@
    ============================================ */
 const AI_CONFIG_KEY = 'wx_ai_config';
 const AI_LOG_KEY = 'wx_ai_log';
+const MAX_PREVIEW_LEN = 500;
 
 function storageGet(keys) {
   return new Promise((resolve, reject) => {
@@ -136,13 +137,21 @@ function initAiConfig() {
     }
   });
 
-  ['change', 'input'].forEach(ev => {
-    [endpoint, apiKey, model].forEach(el => {
-      el.addEventListener(ev, () => {
-        saveAiConfig({ endpoint: endpoint.value.trim(), apiKey: apiKey.value.trim(), model: model.value.trim() });
-      });
-    });
-  });
+  var _aiSaveTimer = null;
+  endpoint.addEventListener('change', saveAiConfigNow);
+  apiKey.addEventListener('change', saveAiConfigNow);
+  model.addEventListener('change', saveAiConfigNow);
+  // input 事件防抖，避免每按一次键都写 storage
+  endpoint.addEventListener('input', debouncedSaveAi);
+  apiKey.addEventListener('input', debouncedSaveAi);
+  model.addEventListener('input', debouncedSaveAi);
+  function saveAiConfigNow() {
+    saveAiConfig({ endpoint: endpoint.value.trim(), apiKey: apiKey.value.trim(), model: model.value.trim() });
+  }
+  function debouncedSaveAi() {
+    clearTimeout(_aiSaveTimer);
+    _aiSaveTimer = setTimeout(saveAiConfigNow, 500);
+  }
 }
 
 /* ============================================

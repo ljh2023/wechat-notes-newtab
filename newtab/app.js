@@ -55,6 +55,8 @@ const btnPrev      = document.getElementById('btnPrev');
 const btnDelete    = document.getElementById('btnDelete');
 const toast        = document.getElementById('toast');
 
+const MAX_PREVIEW_LEN = 500;
+
 // ---- State ----
 let allNotes = [];
 let filteredNotes = [];
@@ -95,8 +97,10 @@ function isSourceEnabled(srcType, enabledSources) {
 }
 
 // ---- Show/hide states ----
+var _allStateEls = null;
 function showState(name) {
-  document.querySelectorAll('.state').forEach(function(s) { s.classList.remove('active'); });
+  if (!_allStateEls) _allStateEls = document.querySelectorAll('.state');
+  _allStateEls.forEach(function(s) { s.classList.remove('active'); });
   var el = states[name];
   if (el) el.classList.add('active');
 }
@@ -250,7 +254,7 @@ function splitDocToKnowledge(note) {
 // ---- 显示知识点的第 N 条 ----
 function showKPoint(idx, total) {
   var text = docKnowledgeList[idx] || '(无内容)';
-  if (text.length > 500) text = text.slice(0, 500) + '……';
+  if (text.length > MAX_PREVIEW_LEN) text = text.slice(0, MAX_PREVIEW_LEN) + '……';
   noteContent.textContent = text;
   noteContent.classList.add('plain');
   var info = '第 ' + (idx + 1) + ' 条 / 共 ' + total + ' 条知识点';
@@ -281,7 +285,7 @@ function renderNote(note) {
   docKnowledgeList = [];
   var content = note.content || '(无内容)';
   if (note.source !== 'markdown' && content.length > 500) {
-    content = content.slice(0, 500) + '……';
+    content = content.slice(0, MAX_PREVIEW_LEN) + '……';
   }
   if (note.source === 'markdown') {
     noteContent.innerHTML = renderMarkdown(cleanTaskText(content));
@@ -319,9 +323,7 @@ function renderNote(note) {
 
 function escapeHTML(str) {
   if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ---- 动画切换卡片 ----
@@ -366,7 +368,7 @@ function switchToNext() {
     if (allNotes.length > 0) {
       // 有笔记但被过滤了，显示第一条
       currentNote = allNotes[0];
-      noteContent.textContent = currentNote.content ? (currentNote.content.slice(0, 500) + '……') : '(无内容)';
+      noteContent.textContent = currentNote.content ? (currentNote.content.slice(0, MAX_PREVIEW_LEN) + '……') : '(无内容)';
       noteContent.classList.add('plain');
       if (currentNote.book) {
         noteSource.innerHTML = '<div class="book-name">《' + currentNote.book + '》</div>';
@@ -515,7 +517,7 @@ function loadNextInMode(skipCurrent) {
   if (currentMode === 'browse') {
     showState('display');
     if (currentNote) {
-      noteContent.textContent = currentNote.content ? ('' + currentNote.content).slice(0, 500) + '……' : '(无内容)';
+      noteContent.textContent = currentNote.content ? ('' + currentNote.content).slice(0, MAX_PREVIEW_LEN) + '……' : '(无内容)';
       noteContent.classList.add('plain');
       noteSource.innerHTML = currentNote.book ? '<div class="book-name">' + currentNote.book + '</div>' : '';
     }
@@ -540,8 +542,7 @@ function loadNextInMode(skipCurrent) {
       if (srcKeys.length > 0) {
         var enabledSrcs = srcKeys.filter(function(k) { return sourceEnabled[k]; });
         if (enabledSrcs.length > 0) {
-          var itemSrcType = item.srcType || 'weread';
-          if (!isSourceEnabled(item.srcType || 'weread', enabledSrcs)) continue; // 跳过不匹配来源的条目
+          if (!isSourceEnabled(item.srcType || 'weread', enabledSrcs)) continue;
         }
       }
       // 跳过不匹配选中书籍的条目
@@ -676,7 +677,7 @@ async function flushSeenIds() {
       await recordBrowseSeen(newCount);
     }
     // 新笔记已写入，刷新覆盖度面板
-    if (newCount > 0 && typeof updateCoverageDisplay === 'function') {
+    if (newCount > 0) {
       addBrowseLog('flushSeen', '刷入 ' + newCount + ' 条新浏览', { totalSeen: progress.seenNoteIds.length });
       await updateCoverageDisplay();
     }
@@ -1248,10 +1249,6 @@ function wrapChineseText(ctx, text, maxWidth) {
 }
 
 /** 测量文本宽度 */
-function measureTextWidth(ctx, text) {
-  return ctx.measureText(text).width;
-}
-
 /** Canvas roundRect */
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
