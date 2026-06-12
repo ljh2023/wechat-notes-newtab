@@ -46,28 +46,38 @@ function showToast(msg, duration = 2500) {
 }
 
 // ---- Storage ----
-async function loadData() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY, SETTINGS_KEY, API_KEY_STORAGE, 'wx_md_sources'], (result) => {
-      resolve(result);
+function storageGet(keys) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, result => {
+      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+      else resolve(result);
     });
   });
 }
 
+function storageSet(obj) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(obj, () => {
+      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+      else resolve();
+    });
+  });
+}
+
+async function loadData() {
+  return storageGet([STORAGE_KEY, SETTINGS_KEY, API_KEY_STORAGE, 'wx_md_sources']);
+}
+
 async function saveData() {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({
-      [STORAGE_KEY]: allNotes,
-      [SETTINGS_KEY]: { excludedBooks: excludeBooks, excludedDocs: excludeDocs, aiExcludeBooks: aiExcludeBooks, aiExcludeDocs: aiExcludeDocs },
-      [API_KEY_STORAGE]: apiKeyInput ? apiKeyInput.value.trim() : '',
-    }, resolve);
+  return storageSet({
+    [STORAGE_KEY]: allNotes,
+    [SETTINGS_KEY]: { excludedBooks: excludeBooks, excludedDocs: excludeDocs, aiExcludeBooks: aiExcludeBooks, aiExcludeDocs: aiExcludeDocs },
+    [API_KEY_STORAGE]: apiKeyInput ? apiKeyInput.value.trim() : '',
   });
 }
 
 async function saveApiKey(key) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [API_KEY_STORAGE]: key }, resolve);
-  });
+  return storageSet({ [API_KEY_STORAGE]: key });
 }
 
 // ---- Build book list ----
@@ -116,28 +126,28 @@ function buildBookList() {
   bookList.innerHTML = html;
 
   document.querySelectorAll('.book-toggle').forEach(el => {
-    el.addEventListener('change', async (e) => {
+    el.addEventListener('change', function(e) {
       const book = e.target.dataset.book;
       if (e.target.checked) {
         excludeBooks = excludeBooks.filter(b => b !== book);
       } else {
         if (!excludeBooks.includes(book)) excludeBooks.push(book);
       }
-      await saveData();
+      debouncedSaveData();
       updateStats();
       showToast(e.target.checked ? '已取消排除《' + book + '》' : '已排除《' + book + '》');
     });
   });
 
   document.querySelectorAll('.book-toggle-ai').forEach(el => {
-    el.addEventListener('change', async (e) => {
+    el.addEventListener('change', function(e) {
       const book = e.target.dataset.book;
       if (e.target.checked) {
         aiExcludeBooks = aiExcludeBooks.filter(b => b !== book);
       } else {
         if (!aiExcludeBooks.includes(book)) aiExcludeBooks.push(book);
       }
-      await saveData();
+      debouncedSaveData();
     });
   });
 }
@@ -289,27 +299,27 @@ function buildDocList() {
 
     // 事件绑定必须在 DOM 更新后执行
     document.querySelectorAll('.doc-toggle').forEach(function(el) {
-      el.addEventListener('change', async function(e) {
+      el.addEventListener('change', function(e) {
         const doc = e.target.dataset.doc;
         if (e.target.checked) {
           excludeDocs = excludeDocs.filter(function(d) { return d !== doc; });
         } else {
           if (excludeDocs.indexOf(doc) === -1) excludeDocs.push(doc);
         }
-        await saveData();
+        debouncedSaveData();
         updateStats();
       });
     });
 
     document.querySelectorAll('.doc-toggle-ai').forEach(function(el) {
-      el.addEventListener('change', async function(e) {
+      el.addEventListener('change', function(e) {
         const doc = e.target.dataset.doc;
         if (e.target.checked) {
           aiExcludeDocs = aiExcludeDocs.filter(function(d) { return d !== doc; });
         } else {
           if (aiExcludeDocs.indexOf(doc) === -1) aiExcludeDocs.push(doc);
         }
-        await saveData();
+        debouncedSaveData();
       });
     });
   }); // chrome.storage.local.get callback end
@@ -361,6 +371,8 @@ btnClearAll.addEventListener('click', () => {
     aiExcludeBooks = [];
     aiExcludeDocs = [];
     saveData().then(() => {
+      // 同时清理关联的 storage 键
+      storageSet({ wx_md_sources: [], wx_ai_cache: [], wx_source_enabled: {}, wx_ai_log: [] }).catch(function() {});
       refreshUI();
       showToast('✅ 已清空所有数据');
     });
@@ -594,7 +606,7 @@ function deleteSource(name, btn) {
   btn.textContent = '⏳';
   btn.disabled = true;
 
-  chrome.storage.local.get(['wx_notes', 'wx_md_sources'], function(data) {
+  storageGet(['wx_notes', 'wx_md_sources', 'wx_ai_cache']).then(function(data) {
     var notes;
     var sourceKey;
     if (name === '微信读书') {
@@ -608,21 +620,34 @@ function deleteSource(name, btn) {
     }
     // 删除来源记录
     var sources = (data.wx_md_sources || []).filter(function(s) { return s.name !== name; });
+    // 删除关联的 AI 缓存
+    var aiCache = (data.wx_ai_cache || []).filter(function(item) {
+      if (name === '微信读书') return item.srcType === 'markdown';
+      return !(item.srcType === 'markdown' && item.data && item.data.source === name);
+    });
 
-    chrome.storage.local.set({ wx_notes: notes, wx_md_sources: sources }, function() {
+    storageSet({ wx_notes: notes, wx_md_sources: sources, wx_ai_cache: aiCache }).then(function() {
       allNotes = notes;
       // 从 DOM 移除该行
       var item = btn.closest('.source-item');
       if (item) item.remove();
       // 同步清除该来源的 sourceEnabled 记录
-      chrome.storage.local.get(['wx_source_enabled'], function(d) {
+      storageGet('wx_source_enabled').then(function(d) {
         var en = d.wx_source_enabled || {};
         delete en[sourceKey];
-        chrome.storage.local.set({ wx_source_enabled: en });
-      });
+        storageSet({ wx_source_enabled: en }).catch(function() {});
+      }).catch(function() {});
       refreshUI();
       showToast('✅ 已删除来源「' + name + '」');
+    }).catch(function() {
+      showToast('❌ 删除失败');
+      btn.textContent = origText;
+      btn.disabled = false;
     });
+  }).catch(function() {
+    showToast('❌ 读取数据失败');
+    btn.textContent = origText;
+    btn.disabled = false;
   });
 }
 
@@ -827,6 +852,15 @@ function refreshCacheStatus() {
 /* ============================================
    新增：主开关
    ============================================ */
+var _saveDataTimer = null;
+function debouncedSaveData() {
+  if (_saveDataTimer) return;
+  _saveDataTimer = setTimeout(function() {
+    _saveDataTimer = null;
+    saveData().catch(function() {});
+  }, 300);
+}
+
 function initMasterToggles() {
   // AI master toggles
   ['masterAiBook', 'masterAiDoc'].forEach(function(id) {

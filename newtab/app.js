@@ -9,18 +9,31 @@ const MODE_KEY = 'wx_display_mode';
 const CACHE_KEY = 'wx_ai_cache';
 const SOURCE_ENABLED_KEY = 'wx_source_enabled';
 
-async function loadAll() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get([STORAGE_KEY, SETTINGS_KEY], (result) => {
-      resolve(result);
+// 通用带错误处理的 storage 工具
+function storageGet(keys) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, result => {
+      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+      else resolve(result);
     });
   });
 }
 
-async function saveNotes(notes) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [STORAGE_KEY]: notes }, resolve);
+function storageSet(obj) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(obj, () => {
+      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+      else resolve();
+    });
   });
+}
+
+async function loadAll() {
+  return storageGet([STORAGE_KEY, SETTINGS_KEY]);
+}
+
+async function saveNotes(notes) {
+  return storageSet({ [STORAGE_KEY]: notes });
 }
 
 // ---- DOM refs ----
@@ -408,7 +421,7 @@ function initModeSwitch() {
   sel.addEventListener('change', function() {
     var oldMode = currentMode;
     currentMode = sel.value;
-    chrome.storage.local.set({ [MODE_KEY]: currentMode });
+    storageSet({ [MODE_KEY]: currentMode }).catch(function() {});
     addBrowseLog('mode', '切至 ' + currentMode, { prevMode: oldMode });
     shownIds = [];
     noteHistory = [];
@@ -454,12 +467,12 @@ function addBrowseLog(type, detail, extra) {
   if (extra && extra.error) logLine += ' ERROR:' + extra.error;
   console.log(logLine);
 
-  chrome.storage.local.get(['wx_ai_log'], function(r) {
+  storageGet('wx_ai_log').then(function(r) {
     var logs = r.wx_ai_log || [];
     logs.push(entry);
     if (logs.length > 1000) logs.splice(0, logs.length - 1000);
-    chrome.storage.local.set({ wx_ai_log: logs });
-  });
+    storageSet({ wx_ai_log: logs }).catch(function() {});
+  }).catch(function() {});
 }
 
 function loadPrevInMode() {
@@ -559,11 +572,11 @@ function loadNextInMode(skipCurrent) {
 }
 
 async function persistCache() {
-  await new Promise(function(r) { chrome.storage.local.set({ [CACHE_KEY]: aiCache }, r); });
+  await storageSet({ [CACHE_KEY]: aiCache });
 }
 
 async function saveCacheIndex() {
-  await new Promise(function(r) { chrome.storage.local.set({ wx_cache_index: cacheIndex }, r); });
+  await storageSet({ wx_cache_index: cacheIndex });
 }
 
 // 显示 AI 知识点（浏览模式专用）
@@ -645,11 +658,7 @@ async function flushSeenIds() {
   try {
     if (pendingSeenIds.size === 0) return;
     const ids = [...pendingSeenIds];
-    const result = await new Promise(resolve => chrome.storage.local.get('wx_learning_progress', resolve));
-    if (chrome.runtime.lastError) {
-      console.error('flushSeenIds: 读取失败', chrome.runtime.lastError);
-      return;
-    }
+    const result = await storageGet('wx_learning_progress');
     const progress = result.wx_learning_progress || {};
     if (!progress.seenNoteIds) progress.seenNoteIds = [];
     let newCount = 0;
@@ -659,12 +668,7 @@ async function flushSeenIds() {
         newCount++;
       }
     });
-    await new Promise((resolve, reject) => {
-      chrome.storage.local.set({ wx_learning_progress: progress }, function() {
-        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-        else resolve();
-      });
-    });
+    await storageSet({ wx_learning_progress: progress });
     // 写入成功后才清除 pending 队列
     pendingSeenIds.clear();
     // 同步记录浏览模式的今日已阅数
@@ -690,10 +694,10 @@ async function updateCoverageDisplay() {
   var progress, allStats;
   try {
     const result = await Promise.all([
-      new Promise(resolve => chrome.storage.local.get('wx_learning_progress', resolve)),
+      storageGet('wx_learning_progress'),
       (typeof getReviewStats === 'function' ? getReviewStats() : Promise.resolve({}))
     ]);
-    progress = (result[0]).wx_learning_progress || {};
+    progress = result[0].wx_learning_progress || {};
     allStats = result[1];
     // getReviewStats 已处理迁移和默认值，直接使用
   } catch (e) {
@@ -960,7 +964,7 @@ function initCoverageClickHandler() {
 }
 
 function showAllBooksPanel() {
-  chrome.storage.local.get(['wx_learning_progress'], function(data) {
+  storageGet('wx_learning_progress').then(function(data) {
     var progress = data.wx_learning_progress || {};
 
     // 读取 QA 正确率
@@ -1283,8 +1287,10 @@ btnDelete.addEventListener('click', () => {
   });
 });
 
-// ---- Confirm dialog ----
+// ---- Confirm dialog（防叠加）----
+let _confirmOverlay = null;
 function showConfirmDialog(message, onConfirm) {
+  if (_confirmOverlay) { _confirmOverlay.remove(); _confirmOverlay = null; }
   const overlay = document.createElement('div');
   overlay.className = 'confirm-overlay';
   overlay.innerHTML = `
@@ -1297,8 +1303,9 @@ function showConfirmDialog(message, onConfirm) {
     </div>
   `;
   document.body.appendChild(overlay);
+  _confirmOverlay = overlay;
 
-  const close = () => overlay.remove();
+  const close = () => { overlay.remove(); if (_confirmOverlay === overlay) _confirmOverlay = null; };
   overlay.querySelector('#confirmCancel').addEventListener('click', close);
   overlay.querySelector('#confirmOk').addEventListener('click', () => {
     close();

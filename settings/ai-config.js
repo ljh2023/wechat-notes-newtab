@@ -4,38 +4,51 @@
 const AI_CONFIG_KEY = 'wx_ai_config';
 const AI_LOG_KEY = 'wx_ai_log';
 
-async function loadAiConfig() {
-  return new Promise(resolve => {
-    chrome.storage.local.get([AI_CONFIG_KEY], result => {
-      resolve(result[AI_CONFIG_KEY] || null);
+function storageGet(keys) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, result => {
+      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+      else resolve(result);
     });
   });
 }
 
-async function saveAiConfig(config) {
-  return new Promise(resolve => {
-    chrome.storage.local.set({ [AI_CONFIG_KEY]: config }, resolve);
+function storageSet(obj) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(obj, () => {
+      if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+      else resolve();
+    });
   });
+}
+
+async function loadAiConfig() {
+  try {
+    const result = await storageGet(AI_CONFIG_KEY);
+    return result[AI_CONFIG_KEY] || null;
+  } catch (e) { return null; }
+}
+
+async function saveAiConfig(config) {
+  await storageSet({ [AI_CONFIG_KEY]: config });
 }
 
 async function addAiLog(entry) {
-  const data = await new Promise(resolve => {
-    chrome.storage.local.get([AI_LOG_KEY], r => resolve(r[AI_LOG_KEY] || []));
-  });
-  data.push({ ts: new Date().toISOString(), ...entry });
-  if (data.length > 200) data.splice(0, data.length - 200);
-  await new Promise(resolve => chrome.storage.local.set({ [AI_LOG_KEY]: data }, resolve));
-  return data;
+  const data = await storageGet(AI_LOG_KEY).catch(function() { return {}; });
+  const logs = data[AI_LOG_KEY] || [];
+  logs.push({ ts: new Date().toISOString(), ...entry });
+  if (logs.length > 200) logs.splice(0, logs.length - 200);
+  await storageSet({ [AI_LOG_KEY]: logs }).catch(function() {});
+  return logs;
 }
 
 async function getAiLogs() {
-  return new Promise(resolve => {
-    chrome.storage.local.get([AI_LOG_KEY], r => resolve(r[AI_LOG_KEY] || []));
-  });
+  const data = await storageGet(AI_LOG_KEY).catch(function() { return {}; });
+  return data[AI_LOG_KEY] || [];
 }
 
 async function clearAiLogs() {
-  return new Promise(resolve => chrome.storage.local.set({ [AI_LOG_KEY]: [] }, resolve));
+  await storageSet({ [AI_LOG_KEY]: [] }).catch(function() {});
 }
 
 function initAiConfig() {
@@ -346,7 +359,7 @@ async function runAIPipeline(onProgress) {
   _pipelineCancelled = false;
 
   var allData = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled'], function(r) { resolve(r); });
+    storageGet(['wx_notes', 'wx_settings', 'wx_source_enabled']).then(resolve).catch(reject);
   });
   var notes = allData.wx_notes || [];
   if (!notes.length) throw new Error('没有笔记可供处理');
@@ -382,7 +395,7 @@ async function runAIPipeline(onProgress) {
 
   // 取缓存大小
   var size = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_cache_size'], function(r) { resolve(r.wx_cache_size || 20); });
+    storageGet('wx_cache_size').then(function(r) { resolve(r.wx_cache_size || 20); }).catch(function() { resolve(20); });
   });
 
   // 随机抽 size 条
@@ -457,7 +470,7 @@ async function runAIPipeline(onProgress) {
 
   // 保存缓存
   await new Promise(function(resolve) {
-    chrome.storage.local.set({ wx_ai_cache: results }, resolve);
+    storageSet({ wx_ai_cache: results }).then(resolve).catch(reject);
   });
   await addAiLog({ type: 'pipeline', status: 'done', total: batch.length, cached: results.length, estTokens: estTokens });
   return { total: batch.length, cached: results.length };
@@ -473,7 +486,7 @@ window.cancelAIPipeline = function() { _pipelineCancelled = true; };
 async function runStructuredExtraction(onProgress) {
   _pipelineCancelled = false;
   var allData = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_notes', 'wx_settings', 'wx_source_enabled'], function(r) { resolve(r); });
+    storageGet(['wx_notes', 'wx_settings', 'wx_source_enabled']).then(resolve).catch(reject);
   });
   var notes = allData.wx_notes || [];
   var mdNotes = notes.filter(function(n) { return n.source === 'markdown'; });
@@ -543,12 +556,12 @@ async function runStructuredExtraction(onProgress) {
 
   // 合并到现有缓存
   var existing = await new Promise(function(resolve) {
-    chrome.storage.local.get(['wx_ai_cache'], function(r) { resolve(r.wx_ai_cache || []); });
+    storageGet('wx_ai_cache').then(function(r) { resolve(r.wx_ai_cache || []); }).catch(function() { resolve([]); });
   });
   // 只保留 AI 生成的（非 struct_ 开头的）
   var aiOnly = existing.filter(function(item) { return item.sourceNoteId && !item.sourceNoteId.startsWith('struct_'); });
   var merged = aiOnly.concat(results);
-  await new Promise(function(resolve) { chrome.storage.local.set({ wx_ai_cache: merged }, resolve); });
+  await storageSet({ wx_ai_cache: merged }).catch(function() {});
 
   await addAiLog({ type: 'struct', status: 'done', total: sourceNames.length, extracted: results.length, cached: merged.length });
   return { cached: results.length };
