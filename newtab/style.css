@@ -13,18 +13,20 @@
   --bg: #f3f0ea;
   --card-bg: #ffffff;
   --text: #2c2c2c;
-  --text-secondary: #8b8579;
+  --text-secondary: #6b6559;
   --text-tertiary: #b8b2a6;
   --accent: #5a7a5a;
   --accent-hover: #4a6a4a;
+  --accent-subtle: #e8f0e8;
   --danger: #c0392b;
   --danger-hover: #a93226;
-  --border: #e8e3da;
+  --danger-bg: #fdf2f0;
+  --border: #e0dbd2;
   --shadow: 0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04);
   --radius: 16px;
   --radius-sm: 8px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
-  --font-serif: "Georgia", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  --font: "Inter", "SF Pro", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Lora", "Georgia", "Noto Serif CJK SC", "Source Han Serif SC", serif;
   --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -341,6 +343,42 @@ a {
 }
 
 /* ---- Responsive ---- */
+/* ---- Dark Mode ---- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1e;
+    --card-bg: #252529;
+    --text: #e8e6e1;
+    --text-secondary: #9e9a92;
+    --text-tertiary: #6e6a62;
+    --border: #35353a;
+    --accent-subtle: #2a3a2a;
+    --shadow: 0 4px 24px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .coverage-panel {
+    background: transparent;
+  }
+  .qa-answer {
+    background: #2a2a2e;
+  }
+  .choice-opt:hover {
+    background: #2a2a2e;
+  }
+  .confirm-overlay {
+    background: rgba(0,0,0,0.5);
+  }
+  .coverage-book-chip {
+    background: #2a2a2e;
+    border-color: #35353a;
+    color: var(--text-secondary);
+  }
+  .coverage-book-chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+}
+
 @media (max-width: 600px) {
   .card {
     padding: 36px 24px 32px;
@@ -452,7 +490,7 @@ a {
 }
 .choice-opt:hover { border-color: var(--accent); background: #faf9f6; }
 .choice-opt.correct { border-color: var(--accent); background: var(--accent-subtle); color: var(--accent-hover); }
-.choice-opt.wrong { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.choice-opt.wrong { border-color: var(--danger); background: var(--danger-bg); color: var(--danger-hover); }
 .choice-opt:disabled { cursor: default; opacity: 0.7; }
 .choice-result {
   margin-top: 12px;
@@ -548,7 +586,7 @@ a {
 .coverage-panel {
   width: 100%;
   padding: 3px 24px 10px;
-  background: #faf9f6;
+  background: var(--card-bg);
   font-size: 12px;
   flex-shrink: 0;
 }
@@ -560,12 +598,12 @@ a {
 }
 .coverage-title {
   font-weight: 600;
-  color: #2c2c2c;
+  color: var(--text);
   font-size: 12px;
 }
 .coverage-meta {
   font-size: 11px;
-  color: #8b8579;
+  color: var(--text-secondary);
 }
 .coverage-progress-wrap {
   display: flex;
@@ -574,17 +612,17 @@ a {
   margin-bottom: 2px;
 }
 .coverage-label {
-  font-size: 10px;
-  color: #8b8579;
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 .coverage-label strong {
   display: inline-block;
   animation: numPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .coverage-pct {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  color: #5a7a5a;
+  color: var(--accent);
   display: inline-block;
   animation: numPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
@@ -596,14 +634,14 @@ a {
 }
 .coverage-bar-bg {
   height: 4px;
-  background: #e8e3da;
+  background: var(--border);
   border-radius: 2px;
   overflow: hidden;
   margin-bottom: 6px;
 }
 .coverage-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #5a7a5a, #8ab88a);
+  background: linear-gradient(90deg, var(--accent), #8ab88a);
   border-radius: 2px;
   position: relative;
   overflow: hidden;
@@ -633,25 +671,25 @@ a {
   border-radius: 10px;
   font-size: 10px;
   cursor: pointer;
-  background: #fff;
-  border: 1px solid #ddd;
-  color: #666;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
   transition: all 0.15s ease;
   user-select: none;
   flex-shrink: 0;
 }
 .coverage-book-chip.active {
-  background: #5a7a5a;
-  border-color: #5a7a5a;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--card-bg);
   font-weight: 600;
 }
 .coverage-book-chip.weak {
   border-color: #f0d9b5;
 }
 .coverage-book-chip.all-books {
-  color: #5a7a5a;
-  background: #e8f0e8;
+  color: var(--accent);
+  background: var(--accent-subtle);
   border-color: #c8dcc8;
 }
 .coverage-books.expanded {

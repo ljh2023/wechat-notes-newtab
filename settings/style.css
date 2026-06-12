@@ -19,12 +19,31 @@
   --danger: #c0392b;
   --danger-hover: #a93226;
   --border: #e0dbd2;
-  --radius: 12px;
+  --radius: 16px;
   --radius-sm: 8px;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --accent-subtle: #e8f0e8;
+  --danger-bg: #fdf2f0;
   --mono: "SF Mono", "Menlo", "Consolas", monospace;
   --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --max-w: 640px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1e;
+    --card-bg: #252529;
+    --text: #e8e6e1;
+    --text-secondary: #9e9a92;
+    --text-tertiary: #6e6a62;
+    --border: #35353a;
+    --accent-subtle: #2a3a2a;
+    --danger-bg: #3a2020;
+  }
+  .import-result.success { background: #1e2e1e; }
+  .import-result.error { background: #3a2020; }
+  .sample-box { background: #1e1e22; }
+  #jsonInput { background: #1e1e22; color: var(--text); }
 }
 
 body {
@@ -312,7 +331,7 @@ body {
 .toggle .slider {
   position: absolute;
   inset: 0;
-  background: #d5d0c6;
+  background: var(--border);
   border-radius: 22px;
   transition: background var(--transition);
 }
